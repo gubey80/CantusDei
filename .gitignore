@@ -1,0 +1,29 @@
+# Dependencias
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Variables locales y secretos
+.env
+.env.*
+!.env.example
+
+# Builds locales
+dist/
+frontend/dist/
+backend/dist/
+
+# Logs y procesos locales
+logs/
+*.log
+*.pid
+
+# Sistema/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Cache
+.cache/
+.vite/

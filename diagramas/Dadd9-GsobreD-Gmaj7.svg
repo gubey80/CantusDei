@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="390" viewBox="0 0 900 390">
+  <rect width="900" height="390" fill="#f4f7fb"/>
+  <style>
+    .card { fill: #fff; stroke: #cfd7e3; stroke-width: 2; }
+    .title { fill: #183153; font: 700 28px Arial, sans-serif; text-anchor: middle; }
+    .shape { fill: #5f6b7d; font: 700 16px Arial, sans-serif; text-anchor: middle; }
+    .string, .fret { stroke: #253247; stroke-width: 2; }
+    .nut { stroke: #253247; stroke-width: 7; }
+    .dot { fill: #183153; }
+    .marker { fill: #5f6b7d; font: 700 17px Arial, sans-serif; text-anchor: middle; }
+  </style>
+
+  <g transform="translate(25 20)">
+    <rect class="card" width="270" height="350" rx="8"/>
+    <text class="title" x="135" y="44">Dadd9</text>
+    <text class="shape" x="135" y="70">xx0230</text>
+    <g transform="translate(60 92)">
+      <text class="marker" x="0" y="0">x</text>
+      <text class="marker" x="30" y="0">x</text>
+      <text class="marker" x="60" y="0">o</text>
+      <text class="marker" x="90" y="0"/>
+      <text class="marker" x="120" y="0"/>
+      <text class="marker" x="150" y="0">o</text>
+      <line class="nut" x1="0" y1="18" x2="150" y2="18"/>
+      <line class="fret" x1="0" y1="68" x2="150" y2="68"/>
+      <line class="fret" x1="0" y1="118" x2="150" y2="118"/>
+      <line class="fret" x1="0" y1="168" x2="150" y2="168"/>
+      <line class="fret" x1="0" y1="218" x2="150" y2="218"/>
+      <line class="string" x1="0" y1="18" x2="0" y2="218"/>
+      <line class="string" x1="30" y1="18" x2="30" y2="218"/>
+      <line class="string" x1="60" y1="18" x2="60" y2="218"/>
+      <line class="string" x1="90" y1="18" x2="90" y2="218"/>
+      <line class="string" x1="120" y1="18" x2="120" y2="218"/>
+      <line class="string" x1="150" y1="18" x2="150" y2="218"/>
+      <circle class="dot" cx="90" cy="93" r="11"/>
+      <circle class="dot" cx="120" cy="143" r="11"/>
+    </g>
+  </g>
+
+  <g transform="translate(315 20)">
+    <rect class="card" width="270" height="350" rx="8"/>
+    <text class="title" x="135" y="44">G/D</text>
+    <text class="shape" x="135" y="70">xx0003</text>
+    <g transform="translate(60 92)">
+      <text class="marker" x="0" y="0">x</text>
+      <text class="marker" x="30" y="0">x</text>
+      <text class="marker" x="60" y="0">o</text>
+      <text class="marker" x="90" y="0">o</text>
+      <text class="marker" x="120" y="0">o</text>
+      <line class="nut" x1="0" y1="18" x2="150" y2="18"/>
+      <line class="fret" x1="0" y1="68" x2="150" y2="68"/>
+      <line class="fret" x1="0" y1="118" x2="150" y2="118"/>
+      <line class="fret" x1="0" y1="168" x2="150" y2="168"/>
+      <line class="fret" x1="0" y1="218" x2="150" y2="218"/>
+      <line class="string" x1="0" y1="18" x2="0" y2="218"/>
+      <line class="string" x1="30" y1="18" x2="30" y2="218"/>
+      <line class="string" x1="60" y1="18" x2="60" y2="218"/>
+      <line class="string" x1="90" y1="18" x2="90" y2="218"/>
+      <line class="string" x1="120" y1="18" x2="120" y2="218"/>
+      <line class="string" x1="150" y1="18" x2="150" y2="218"/>
+      <circle class="dot" cx="150" cy="143" r="11"/>
+    </g>
+  </g>
+
+  <g transform="translate(605 20)">
+    <rect class="card" width="270" height="350" rx="8"/>
+    <text class="title" x="135" y="44">Gmaj7</text>
+    <text class="shape" x="135" y="70">320002</text>
+    <g transform="translate(60 92)">
+      <text class="marker" x="60" y="0">o</text>
+      <text class="marker" x="90" y="0">o</text>
+      <text class="marker" x="120" y="0">o</text>
+      <line class="nut" x1="0" y1="18" x2="150" y2="18"/>
+      <line class="fret" x1="0" y1="68" x2="150" y2="68"/>
+      <line class="fret" x1="0" y1="118" x2="150" y2="118"/>
+      <line class="fret" x1="0" y1="168" x2="150" y2="168"/>
+      <line class="fret" x1="0" y1="218" x2="150" y2="218"/>
+      <line class="string" x1="0" y1="18" x2="0" y2="218"/>
+      <line class="string" x1="30" y1="18" x2="30" y2="218"/>
+      <line class="string" x1="60" y1="18" x2="60" y2="218"/>
+      <line class="string" x1="90" y1="18" x2="90" y2="218"/>
+      <line class="string" x1="120" y1="18" x2="120" y2="218"/>
+      <line class="string" x1="150" y1="18" x2="150" y2="218"/>
+      <circle class="dot" cx="0" cy="143" r="11"/>
+      <circle class="dot" cx="30" cy="93" r="11"/>
+      <circle class="dot" cx="150" cy="93" r="11"/>
+    </g>
+  </g>
+</svg>

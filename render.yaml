@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: cantusdei-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npx prisma generate
+    startCommand: npx prisma migrate deploy && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false

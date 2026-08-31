@@ -1,0 +1,4 @@
+ALTER TABLE "Chord"
+ADD COLUMN "barreFret" INTEGER,
+ADD COLUMN "barreFromString" INTEGER,
+ADD COLUMN "barreToString" INTEGER;

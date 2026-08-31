@@ -1,0 +1,5 @@
+ALTER TABLE "Tutorial"
+ADD COLUMN "category" TEXT NOT NULL DEFAULT 'TUTORIAL',
+ADD COLUMN "fileName" TEXT,
+ADD COLUMN "fileMimeType" TEXT,
+ADD COLUMN "fileData" TEXT;

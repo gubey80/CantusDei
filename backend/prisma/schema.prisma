@@ -1,0 +1,224 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  VISITOR
+}
+
+enum SongVersionStatus {
+  DRAFT
+  REVIEWED
+  ARCHIVED
+}
+
+model User {
+  id           String      @id @default(cuid())
+  name         String
+  email        String      @unique
+  passwordHash String?
+  role         UserRole    @default(VISITOR)
+  active       Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  auditLogs    AuditLog[]
+}
+
+model Songbook {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String   @default("")
+  createdAt   DateTime @default(now())
+  songs       Song[]
+}
+
+model Song {
+  id            String        @id @default(cuid())
+  songbookId    String
+  title         String
+  artist        String        @default("")
+  listenUrl     String        @default("")
+  copyrightText String        @default("")
+  tags          String[]      @default([])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  songbook      Songbook      @relation(fields: [songbookId], references: [id])
+  versions      SongVersion[]
+
+  @@index([title])
+  @@index([songbookId])
+}
+
+model SongVersion {
+  id                 String             @id @default(cuid())
+  songId             String
+  name               String
+  key                String
+  capo               Int                @default(0)
+  bpm                Int                @default(96)
+  duration           String             @default("4:00")
+  difficulty         String             @default("Inicial")
+  owner              String             @default("")
+  lyrics             String
+  comments           String             @default("")
+  internalNotes      String             @default("")
+  reviewed           Boolean            @default(false)
+  status             SongVersionStatus  @default(DRAFT)
+  playbackSpeed      Int                @default(2800)
+  rehearsalSpeed     Decimal            @default(0.75) @db.Decimal(4, 2)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  song               Song               @relation(fields: [songId], references: [id], onDelete: Cascade)
+  chords             SongVersionChord[]
+  setlistItems       SetlistItem[]
+
+  @@unique([songId, key, capo])
+  @@index([key])
+  @@index([capo])
+}
+
+model Chord {
+  id            String             @id @default(cuid())
+  name          String             @unique
+  root          String
+  suffix        String             @default("")
+  bass          String?
+  frets         Json?
+  capo          Int                @default(0)
+  barreFret     Int?
+  barreFromString Int?
+  barreToString Int?
+  difficulty    Decimal            @default(1) @db.Decimal(4, 2)
+  configured    Boolean            @default(false)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  songVersions  SongVersionChord[]
+  variants      ChordVariant[]
+
+  @@index([root])
+  @@index([capo])
+}
+
+model ChordVariant {
+  id              String   @id @default(cuid())
+  chordId         String
+  name            String   @default("Principal")
+  frets           Json?
+  capo            Int      @default(0)
+  barreFret       Int?
+  barreFromString Int?
+  barreToString   Int?
+  difficulty      Decimal  @default(1) @db.Decimal(4, 2)
+  configured      Boolean  @default(false)
+  validated       Boolean  @default(false)
+  isDefault       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  chord           Chord    @relation(fields: [chordId], references: [id], onDelete: Cascade)
+
+  @@unique([chordId, name])
+  @@index([chordId])
+  @@index([validated])
+  @@index([isDefault])
+}
+
+model ChordFamily {
+  id        String   @id @default(cuid())
+  root      String   @unique
+  label     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ChordSuggestionDraft {
+  id            String   @id @default(cuid())
+  sourceUrl     String
+  title         String   @default("")
+  artist        String   @default("")
+  key           String   @default("")
+  capo          Int      @default(0)
+  bpm           Int?
+  timeSignature String   @default("")
+  confidence    Int      @default(0)
+  summary       String   @default("")
+  sections      Json     @default("[]")
+  chords        Json     @default("[]")
+  sources       Json     @default("[]")
+  notes         String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+model SongVersionChord {
+  id            String      @id @default(cuid())
+  songVersionId String
+  chordId       String
+  count         Int         @default(1)
+  firstPosition Int         @default(0)
+  songVersion   SongVersion @relation(fields: [songVersionId], references: [id], onDelete: Cascade)
+  chord         Chord       @relation(fields: [chordId], references: [id], onDelete: Cascade)
+
+  @@unique([songVersionId, chordId])
+  @@index([chordId])
+}
+
+model Setlist {
+  id          String        @id @default(cuid())
+  name        String
+  date        DateTime
+  leader      String        @default("")
+  musicians   Json          @default("{}")
+  comments    String        @default("")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  items       SetlistItem[]
+
+  @@index([date])
+}
+
+model SetlistItem {
+  id            String      @id @default(cuid())
+  setlistId     String
+  songVersionId String
+  position      Int
+  comment       String      @default("")
+  setlist       Setlist     @relation(fields: [setlistId], references: [id], onDelete: Cascade)
+  songVersion   SongVersion @relation(fields: [songVersionId], references: [id])
+
+  @@unique([setlistId, position])
+}
+
+model Tutorial {
+  id           String   @id @default(cuid())
+  title        String
+  body         String
+  category     String   @default("TUTORIAL")
+  position     Int      @default(0)
+  fileName     String?
+  fileMimeType String?
+  fileData     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  entity    String
+  entityId  String
+  action    String
+  details   Json?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([entity, entityId])
+}
