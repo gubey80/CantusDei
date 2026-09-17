@@ -1853,7 +1853,7 @@ function SetlistProjection({ form, items, chords, mode, onClose, onSpeedChange }
               {isRehearsal ? <button onClick={() => setShowDiagrams((value) => !value)} type="button">{showDiagrams ? "Ocultar diagramas" : "Mostrar diagramas"}</button> : null}
             </>
           ) : null}
-          <button onClick={() => setFontSize((value) => Math.max(16, value - 2))} type="button">A-</button>
+          <button onClick={() => setFontSize((value) => Math.max(12, value - 2))} type="button">A-</button>
           <button onClick={() => setFontSize((value) => Math.min(36, value + 2))} type="button">A+</button>
           <button onClick={toggleFullscreen} title="Pantalla completa" type="button"><Maximize size={18} /></button>
           <button onClick={onClose} title="Volver a Setlists" type="button"><X size={19} /></button>
