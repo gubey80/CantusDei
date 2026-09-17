@@ -1789,6 +1789,8 @@ button.diagram {
   inset: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100vh;
+  height: 100dvh;
   color: #f8fafc;
   background: #111827;
 }
@@ -2037,6 +2039,16 @@ button.diagram {
   overflow-wrap: anywhere;
 }
 
+.setlist-projection-navigation {
+  border-top: 1px solid #334155;
+}
+
+.setlist-projection-navigation button:last-child {
+  margin-left: auto;
+  border-color: #2563eb;
+  background: #2563eb;
+}
+
 @media (max-width: 760px) {
   .setlist-projection {
     grid-template-rows: auto minmax(0, 1fr) auto;
@@ -2071,7 +2083,7 @@ button.diagram {
   }
 
   .setlist-song-slide {
-    padding: 14px 16px 24px;
+    padding: 14px 16px 76px;
   }
 
   .setlist-song-slide > header {
@@ -2101,31 +2113,27 @@ button.diagram {
   }
 
   .setlist-projection-navigation {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1002;
     display: flex;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 8px 12px max(8px, env(safe-area-inset-bottom));
+    background: #0b1220;
   }
 
   .setlist-projection-navigation button {
     flex: 1 1 0;
     min-width: 0;
-    min-height: 38px;
+    min-height: 40px;
     padding: 6px 8px;
   }
 
   .setlist-projection-navigation button:last-child {
     margin-left: 0;
   }
-}
-
-.setlist-projection-navigation {
-  border-top: 1px solid #334155;
-}
-
-.setlist-projection-navigation button:last-child {
-  margin-left: auto;
-  border-color: #2563eb;
-  background: #2563eb;
 }
 
 .chords-shell {
