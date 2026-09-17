@@ -2039,7 +2039,7 @@ button.diagram {
 
 @media (max-width: 760px) {
   .setlist-projection {
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
   .setlist-projection-toolbar {
@@ -2101,7 +2101,20 @@ button.diagram {
   }
 
   .setlist-projection-navigation {
-    display: none;
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .setlist-projection-navigation button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 38px;
+    padding: 6px 8px;
+  }
+
+  .setlist-projection-navigation button:last-child {
+    margin-left: 0;
   }
 }
 
