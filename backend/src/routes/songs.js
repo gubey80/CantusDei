@@ -130,9 +130,9 @@ function normalizeImportSong(item) {
   };
 }
 
-async function getOrCreateChord(name) {
+async function getOrCreateChord(name, client = prisma) {
   const parts = chordParts(name);
-  return prisma.chord.upsert({
+  return client.chord.upsert({
     where: { name },
     update: {},
     create: {
@@ -145,12 +145,12 @@ async function getOrCreateChord(name) {
   });
 }
 
-async function syncVersionChords(songVersionId, lyrics) {
+async function syncVersionChords(songVersionId, lyrics, client = prisma) {
   const summary = summarizeChords(lyrics);
-  await prisma.songVersionChord.deleteMany({ where: { songVersionId } });
+  await client.songVersionChord.deleteMany({ where: { songVersionId } });
   for (const item of summary) {
-    const chord = await getOrCreateChord(item.chord);
-    await prisma.songVersionChord.create({
+    const chord = await getOrCreateChord(item.chord, client);
+    await client.songVersionChord.create({
       data: {
         songVersionId,
         chordId: chord.id,
@@ -161,8 +161,8 @@ async function syncVersionChords(songVersionId, lyrics) {
   }
 }
 
-async function findSongByTitleAndSongbook(title, songbookId) {
-  return prisma.song.findFirst({
+async function findSongByTitleAndSongbook(title, songbookId, client = prisma) {
+  return client.song.findFirst({
     where: {
       songbookId,
       title: { equals: title, mode: "insensitive" },
@@ -192,8 +192,8 @@ async function previewImportSong(input) {
   };
 }
 
-async function importSong(input) {
-  const songbook = await prisma.songbook.upsert({
+async function importSong(input, client = prisma) {
+  const songbook = await client.songbook.upsert({
     where: { code: input.songbookCode },
     update: {},
     create: {
@@ -201,7 +201,7 @@ async function importSong(input) {
       name: songbookNameFromCode(input.songbookCode),
     },
   });
-  const existingSong = await findSongByTitleAndSongbook(input.title, songbook.id);
+  const existingSong = await findSongByTitleAndSongbook(input.title, songbook.id, client);
   const songData = {
     songbookId: songbook.id,
     title: input.title,
@@ -211,8 +211,8 @@ async function importSong(input) {
     tags: input.tags,
   };
   const song = existingSong
-    ? await prisma.song.update({ where: { id: existingSong.id }, data: songData, include: { versions: true } })
-    : await prisma.song.create({ data: { ...(input.id ? { id: input.id } : {}), ...songData }, include: { versions: true } });
+    ? await client.song.update({ where: { id: existingSong.id }, data: songData, include: { versions: true } })
+    : await client.song.create({ data: { ...(input.id ? { id: input.id } : {}), ...songData }, include: { versions: true } });
 
   const versionData = {
     ...input.version,
@@ -222,9 +222,9 @@ async function importSong(input) {
     version.key === input.version.key && Number(version.capo || 0) === Number(input.version.capo || 0)
   ));
   const version = existingVersion
-    ? await prisma.songVersion.update({ where: { id: existingVersion.id }, data: versionData })
-    : await prisma.songVersion.create({ data: { songId: song.id, ...versionData } });
-  await syncVersionChords(version.id, input.version.lyrics);
+    ? await client.songVersion.update({ where: { id: existingVersion.id }, data: versionData })
+    : await client.songVersion.create({ data: { songId: song.id, ...versionData } });
+  await syncVersionChords(version.id, input.version.lyrics, client);
   return {
     songId: song.id,
     versionId: version.id,
@@ -342,6 +342,53 @@ songsRouter.post("/import/commit", requireAdmin, async (req, res, next) => {
         updatedVersion: results.filter((item) => item.action === "updatedVersion").length,
       },
       results,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+songsRouter.post("/import/replace", requireAdmin, async (req, res, next) => {
+  try {
+    const normalized = normalizeImportPayload(req.body).map(normalizeImportSong);
+    const songbookCodes = [...new Set(normalized.map((item) => item.songbookCode))];
+    if (songbookCodes.length !== 1) {
+      return res.status(400).json({ message: "El reemplazo debe contener canciones de un solo cancionero." });
+    }
+    const songbookCode = songbookCodes[0];
+    const result = await prisma.$transaction(async (tx) => {
+      const songbook = await tx.songbook.upsert({
+        where: { code: songbookCode },
+        update: {},
+        create: { code: songbookCode, name: songbookNameFromCode(songbookCode) },
+      });
+      const removedSetlistItems = await tx.setlistItem.deleteMany({
+        where: {
+          songVersion: {
+            song: { songbookId: songbook.id },
+          },
+        },
+      });
+      const removedSongs = await tx.song.deleteMany({ where: { songbookId: songbook.id } });
+      const results = [];
+      for (const item of normalized) {
+        results.push(await importSong(item, tx));
+      }
+      return { removedSetlistItems: removedSetlistItems.count, removedSongs: removedSongs.count, results };
+    }, { timeout: 60000 });
+
+    res.status(201).json({
+      total: result.results.length,
+      removed: {
+        songs: result.removedSongs,
+        setlistItems: result.removedSetlistItems,
+      },
+      summary: {
+        createdSong: result.results.filter((item) => item.action === "createdSong").length,
+        addedVersion: result.results.filter((item) => item.action === "addedVersion").length,
+        updatedVersion: result.results.filter((item) => item.action === "updatedVersion").length,
+      },
+      results: result.results,
     });
   } catch (error) {
     next(error);

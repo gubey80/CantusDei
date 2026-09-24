@@ -1385,6 +1385,29 @@ function SongImportView({ onReload, setGlobalError }) {
     }
   }
 
+  async function replaceImport() {
+    if (!parsedPayload || !preview?.valid) return;
+    const confirmed = window.confirm(
+      `Esto va a borrar las canciones actuales del cancionero "${selectedSongbookCode}" y cargar ${preview.total} cancion(es) desde este JSON. Tambien se quitaran de las setlists las canciones borradas. Continuar?`,
+    );
+    if (!confirmed) return;
+    setSaving(true);
+    setGlobalError("");
+    setMessage("");
+    try {
+      const result = await api("/songs/import/replace", {
+        method: "POST",
+        body: JSON.stringify(parsedPayload),
+      });
+      setMessage(`Reemplazo completo: ${result.removed.songs} canciones anteriores eliminadas, ${result.summary.createdSong} canciones cargadas. Items quitados de setlists: ${result.removed.setlistItems}.`);
+      await onReload(result.results?.[0]?.songId || "");
+    } catch (error) {
+      setGlobalError(error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <section className="work-area import-shell">
       <div className="section-title-band">
@@ -1440,6 +1463,7 @@ function SongImportView({ onReload, setGlobalError }) {
           <div className="form-actions">
             <button className="secondary-action" onClick={() => setRawJson(IMPORT_SAMPLE)} disabled={saving} type="button">Cargar ejemplo</button>
             <button className="primary-action" onClick={runPreview} disabled={saving} type="button"><Eye size={16} /> Previsualizar</button>
+            <button className="danger-action" onClick={replaceImport} disabled={saving || !preview?.valid} type="button"><Trash2 size={16} /> Limpiar y volver a cargar</button>
           </div>
         </section>
 
