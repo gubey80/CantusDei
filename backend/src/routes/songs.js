@@ -239,6 +239,7 @@ songsRouter.get("/", async (req, res, next) => {
   try {
     const search = String(req.query.search || "").trim();
     const songbookCode = String(req.query.songbook || "").trim();
+    const summary = ["1", "true", "yes"].includes(String(req.query.summary || "").toLowerCase());
     const where = {
       ...(songbookCode ? { songbook: { code: songbookCode } } : {}),
       ...(search ? {
@@ -262,7 +263,28 @@ songsRouter.get("/", async (req, res, next) => {
       orderBy: { title: "asc" },
       include: {
         songbook: true,
-        versions: { orderBy: [{ key: "asc" }, { capo: "asc" }] },
+        versions: summary
+          ? {
+              orderBy: [{ key: "asc" }, { capo: "asc" }],
+              select: {
+                id: true,
+                songId: true,
+                name: true,
+                key: true,
+                capo: true,
+                bpm: true,
+                duration: true,
+                difficulty: true,
+                owner: true,
+                reviewed: true,
+                status: true,
+                playbackSpeed: true,
+                rehearsalSpeed: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            }
+          : { orderBy: [{ key: "asc" }, { capo: "asc" }] },
       },
     });
     res.json(songs);

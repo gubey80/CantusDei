@@ -3756,6 +3756,17 @@ function ChordSuggestionView({ setGlobalError }) {
   );
 }
 
+function songListUrl(searchValue = "") {
+  const params = new URLSearchParams({ summary: "1" });
+  const normalizedSearch = String(searchValue || "").trim();
+  if (normalizedSearch) params.set("search", normalizedSearch);
+  return `/songs?${params.toString()}`;
+}
+
+function hasLoadedLyrics(song) {
+  return Boolean(song?.__detailsLoaded || song?.versions?.some((version) => Object.prototype.hasOwnProperty.call(version, "lyrics")));
+}
+
 function App() {
   const [view, setView] = useState("songs");
   const [currentUser, setCurrentUser] = useState(() => {
@@ -3769,6 +3780,7 @@ function App() {
   const [setlists, setSetlists] = useState([]);
   const [tutorials, setTutorials] = useState([]);
   const [users, setUsers] = useState([]);
+  const [songDetailsById, setSongDetailsById] = useState({});
   const [search, setSearch] = useState("");
   const [selectedSongId, setSelectedSongId] = useState("");
   const [editorSelectedSongId, setEditorSelectedSongId] = useState("");
@@ -3777,13 +3789,42 @@ function App() {
   const [readerVersionFocus, setReaderVersionFocus] = useState("");
   const [chordConfigurationRequest, setChordConfigurationRequest] = useState(null);
   const [error, setError] = useState("");
+  const didSkipInitialSearch = useRef(false);
+  const songRequestSequence = useRef(0);
   const isAdmin = currentUser?.role === "ADMIN";
 
+  function cacheSongDetails(song) {
+    const detailedSong = { ...song, __detailsLoaded: true };
+    setSongDetailsById((current) => ({ ...current, [song.id]: detailedSong }));
+    setSongs((current) => current.map((item) => (item.id === song.id ? { ...item, ...detailedSong } : item)));
+  }
+
+  async function loadSongs(preferredSelectedSongId = selectedSongId, searchValue = search) {
+    const requestId = songRequestSequence.current + 1;
+    songRequestSequence.current = requestId;
+    try {
+      setError("");
+      const songData = await api(songListUrl(searchValue));
+      if (requestId !== songRequestSequence.current) return [];
+      setSongs(songData);
+      const preferredExists = songData.some((song) => song.id === preferredSelectedSongId);
+      if (preferredSelectedSongId && preferredExists) setSelectedSongId(preferredSelectedSongId);
+      else if (songData[0]) setSelectedSongId(songData[0].id);
+      else setSelectedSongId("");
+      return songData;
+    } catch (loadError) {
+      setError(loadError.message);
+      return [];
+    }
+  }
+
   async function loadData(preferredSelectedSongId = selectedSongId) {
+    const requestId = songRequestSequence.current + 1;
+    songRequestSequence.current = requestId;
     try {
       setError("");
       const [songData, chordData, familyData, usageData, setlistData, tutorialData, userData] = await Promise.all([
-        api(`/songs${search ? `?search=${encodeURIComponent(search)}` : ""}`),
+        api(songListUrl(search)),
         api("/chords"),
         api("/chords/families"),
         api("/chords/usage"),
@@ -3791,35 +3832,87 @@ function App() {
         api("/tutorials"),
         api("/users"),
       ]);
-      setSongs(songData);
+      if (requestId === songRequestSequence.current) setSongs(songData);
       setChords(chordData);
       setChordFamilies(familyData);
       setUsage(usageData);
       setSetlists(setlistData);
       setTutorials(tutorialData);
       setUsers(userData);
-      const preferredExists = songData.some((song) => song.id === preferredSelectedSongId);
-      if (preferredSelectedSongId && preferredExists) setSelectedSongId(preferredSelectedSongId);
-      else if (songData[0]) setSelectedSongId(songData[0].id);
-      else setSelectedSongId("");
+      if (requestId === songRequestSequence.current) {
+        const preferredExists = songData.some((song) => song.id === preferredSelectedSongId);
+        if (preferredSelectedSongId && preferredExists) setSelectedSongId(preferredSelectedSongId);
+        else if (songData[0]) setSelectedSongId(songData[0].id);
+        else setSelectedSongId("");
+      }
     } catch (loadError) {
       setError(loadError.message);
     }
   }
 
   useEffect(() => {
-    const timer = window.setTimeout(loadData, 250);
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    if (!didSkipInitialSearch.current) {
+      didSkipInitialSearch.current = true;
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      loadSongs(selectedSongId, search);
+    }, 300);
     return () => window.clearTimeout(timer);
   }, [search]);
 
-  const selectedSong = useMemo(
-    () => songs.find((song) => song.id === selectedSongId) || songs[0],
+  const selectedSongSummary = useMemo(
+    () => songs.find((song) => song.id === selectedSongId) || songs[0] || null,
     [songs, selectedSongId],
   );
-  const editorSelectedSong = useMemo(
+  const selectedSong = useMemo(
+    () => (selectedSongSummary ? songDetailsById[selectedSongSummary.id] || selectedSongSummary : null),
+    [selectedSongSummary, songDetailsById],
+  );
+  const editorSelectedSongSummary = useMemo(
     () => songs.find((song) => song.id === editorSelectedSongId) || null,
     [songs, editorSelectedSongId],
   );
+  const editorSelectedSong = useMemo(
+    () => (editorSelectedSongSummary ? songDetailsById[editorSelectedSongSummary.id] || editorSelectedSongSummary : null),
+    [editorSelectedSongSummary, songDetailsById],
+  );
+
+  useEffect(() => {
+    const songId = selectedSongSummary?.id;
+    if (!songId || hasLoadedLyrics(songDetailsById[songId])) return undefined;
+    let active = true;
+    api(`/songs/${songId}`)
+      .then((song) => {
+        if (active) cacheSongDetails(song);
+      })
+      .catch((loadError) => {
+        if (active) setError(loadError.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedSongSummary?.id, songDetailsById]);
+
+  useEffect(() => {
+    const songId = editorSelectedSongSummary?.id;
+    if (!songId || hasLoadedLyrics(songDetailsById[songId])) return undefined;
+    let active = true;
+    api(`/songs/${songId}`)
+      .then((song) => {
+        if (active) cacheSongDetails(song);
+      })
+      .catch((loadError) => {
+        if (active) setError(loadError.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [editorSelectedSongSummary?.id, songDetailsById]);
 
   function openSongEditor(mode) {
     setEditorMode(mode);
