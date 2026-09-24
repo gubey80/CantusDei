@@ -340,6 +340,9 @@ def convert(pdf_path, titles_path):
                     break
 
             lyrics, converted_pairs = convert_lines(collected)
+            lyrics_missing = not lyrics.strip()
+            if lyrics_missing:
+                lyrics = "Pendiente de completar desde el cancionero."
             key = key_from_chord(first_chord(lyrics))
             songs.append({
                 "songbook": "mayor",
@@ -353,7 +356,10 @@ def convert(pdf_path, titles_path):
                 "duration": "4:00",
                 "level": "Inicial",
                 "comments": f"Importado desde {Path(pdf_path).name}",
-                "notes": f"Pagina original: {entry['page']}. Corte por indice PDF.",
+                "notes": (
+                    f"Pagina original: {entry['page']}. Corte por indice PDF."
+                    + (" Letra no encontrada en el PDF; revisar manualmente." if lyrics_missing else "")
+                ),
                 "reviewed": False,
             })
             report_items.append({
@@ -365,7 +371,7 @@ def convert(pdf_path, titles_path):
                 "lineCount": len([line for line in lyrics.splitlines() if line.strip()]),
                 "convertedChordPairs": converted_pairs,
                 "chordCount": len(re.findall(r"\[[^\]]+\]", lyrics)),
-                "hasLyrics": bool(lyrics.strip()),
+                "hasLyrics": not lyrics_missing,
             })
     return {
         "format": "acordia-song-import",

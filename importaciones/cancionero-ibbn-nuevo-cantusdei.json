@@ -1,7 +1,7 @@
 {
   "format": "acordia-song-import",
   "version": 1,
-  "exportedAt": "2026-09-24T23:21:44.887791+00:00",
+  "exportedAt": "2026-09-24T23:47:31.785823+00:00",
   "source": "Cancionero IBBN Nuevo.pdf",
   "songs": [
     {
@@ -3476,12 +3476,12 @@
       "key": "Do",
       "capo": 0,
       "versionName": "Tono Do",
-      "lyrics": "",
+      "lyrics": "Pendiente de completar desde el cancionero.",
       "bpm": 96,
       "duration": "4:00",
       "level": "Inicial",
       "comments": "Importado desde Cancionero IBBN Nuevo.pdf",
-      "notes": "Pagina original: 295. Corte por indice PDF.",
+      "notes": "Pagina original: 295. Corte por indice PDF. Letra no encontrada en el PDF; revisar manualmente.",
       "reviewed": false
     },
     {
