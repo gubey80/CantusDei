@@ -1,0 +1,22 @@
+{
+  "source": "Cancionero IBBN Nuevo.docx",
+  "convertedSongs": 358,
+  "indexSongs": 366,
+  "withoutChords": [
+    "Ángeles cantando están"
+  ],
+  "titlesInIndexButNotDocxClean": [
+    "Déjanos ver",
+    "Gloria a Cristo el Señor",
+    "Gloria a Ti, Jesús Divino",
+    "No valgo por mi posesión",
+    "Padre del cielo te adoramos",
+    "Por amor",
+    "Porque Bueno es Dios",
+    "Sobre todo es Rey",
+    "Somos Tuyos"
+  ],
+  "titlesInDocxCleanButNotIndex": [
+    "Gloria, gloria aleluya"
+  ]
+}
