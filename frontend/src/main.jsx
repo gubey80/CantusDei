@@ -63,6 +63,15 @@ const DEFAULT_CHORDS = {
 
 const NOTE_ORDER = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const NOTE_ORDER_FLATS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const SPANISH_ROOTS = {
+  do: "C",
+  re: "D",
+  mi: "E",
+  fa: "F",
+  sol: "G",
+  la: "A",
+  si: "B",
+};
 const FLAT_EQUIVALENTS = {
   Db: "C#",
   Eb: "D#",
@@ -121,6 +130,36 @@ function transposeChordName(chord, steps, noteNames = NOTE_ORDER) {
 function transposeLyricsBySteps(lyrics, steps, sourceKey = "") {
   const noteNames = preferredNoteOrder(sourceKey);
   return String(lyrics || "").replace(/\[([^\]]+)\]/g, (_, chord) => `[${transposeChordName(chord.trim(), steps, noteNames)}]`);
+}
+
+function normalizeChordForLookup(chord = "") {
+  const parts = String(chord || "").trim().split("/");
+  const normalized = parts.map((part) => {
+    const value = part.trim().replace(/[().,;:¡!¿?]+$/g, "");
+    const spanish = value.toLowerCase().match(/^(do|re|mi|fa|sol|la|si)(#|b)?(-|m|maj7|m7|7|sus2|sus4|sus|add2|add9|dim|aug|6|9|11|13)?$/);
+    if (spanish) {
+      const [, root, accidental = "", suffix = ""] = spanish;
+      return `${SPANISH_ROOTS[root]}${accidental}${suffix === "-" ? "m" : suffix}`;
+    }
+    const english = value.match(/^([A-G])([#b]?)(m|maj7|m7|7|sus2|sus4|sus|add2|add9|dim|aug|6|9|11|13)?$/i);
+    if (!english) return value;
+    const [, root, accidental = "", suffix = ""] = english;
+    return `${root.toUpperCase()}${accidental}${suffix}`;
+  });
+  return normalized.join("/");
+}
+
+function chordLookupMap(chords = []) {
+  const map = new Map();
+  chords.forEach((chord) => {
+    map.set(chord.name, chord);
+    map.set(normalizeChordForLookup(chord.name), chord);
+  });
+  return map;
+}
+
+function findChordDefinition(chordByName, chordName) {
+  return chordByName.get(chordName) || chordByName.get(normalizeChordForLookup(chordName)) || null;
 }
 
 function transposeOptionsFromKey(sourceKey) {
@@ -460,7 +499,7 @@ function ReaderView({ songs, chords, selectedSong, onSelectSong, search, setSear
   }, [selectedSong, selectedVersionId]);
 
   const usedChords = useMemo(() => extractUniqueChords(selectedVersion?.lyrics), [selectedVersion?.lyrics]);
-  const chordByName = useMemo(() => new Map(chords.map((chord) => [chord.name, chord])), [chords]);
+  const chordByName = useMemo(() => chordLookupMap(chords), [chords]);
 
   return (
     <section className="work-area reader-shell">
@@ -539,7 +578,7 @@ function ReaderView({ songs, chords, selectedSong, onSelectSong, search, setSear
                   <aside className="chords-panel">
                     <div className="chord-diagrams">
                       {usedChords.map((chordName) => {
-                        const definition = chordByName.get(chordName);
+                        const definition = findChordDefinition(chordByName, chordName);
                         return (
                           <ChordDiagram
                             key={chordName}
@@ -550,7 +589,7 @@ function ReaderView({ songs, chords, selectedSong, onSelectSong, search, setSear
                             barreFromString={definition?.barreFromString}
                             barreToString={definition?.barreToString}
                             configuredOverride={Boolean(definition?.configured)}
-                            onConfigure={onConfigureChord ? () => onConfigureChord(chordName, selectedVersion.id) : null}
+                            onConfigure={onConfigureChord ? () => onConfigureChord(normalizeChordForLookup(chordName), selectedVersion.id) : null}
                           />
                         );
                       })}
@@ -700,7 +739,7 @@ function SongEditorView({ songs, chords = [], selectedSong, onSelectSong, search
   const selectedVersion = useMemo(() => {
     return selectedSong?.versions?.find((version) => version.id === selectedVersionId) || selectedSong?.versions?.[0] || null;
   }, [selectedSong, selectedVersionId]);
-  const chordByName = useMemo(() => new Map(chords.map((chord) => [chord.name, chord])), [chords]);
+  const chordByName = useMemo(() => chordLookupMap(chords), [chords]);
   const transposeOptions = useMemo(() => transposeOptionsFromKey(selectedVersion?.key), [selectedVersion?.key]);
   const quickTransposeOptions = useMemo(() => (
     QUICK_TRANSPOSE_STEPS
@@ -1230,7 +1269,7 @@ function SongEditorView({ songs, chords = [], selectedSong, onSelectSong, search
               <aside className="chords-panel">
                 <div className="chord-diagrams">
                   {extractUniqueChords(versionForm.lyrics).map((chord) => {
-                    const definition = chordByName.get(chord);
+                    const definition = findChordDefinition(chordByName, chord);
                     return (
                       <ChordDiagram
                         key={chord}
@@ -1743,8 +1782,8 @@ function SetlistProjection({ form, items, chords, mode, onClose, onSpeedChange }
   const scrollTargetRef = useRef(null);
   const item = items[index];
   const usedChordDefinitions = useMemo(() => {
-    const byName = new Map(chords.filter((chord) => chord.configured).map((chord) => [chord.name, chord]));
-    return extractUniqueChords(item?.lyrics).map((name) => byName.get(name)).filter(Boolean);
+    const byName = chordLookupMap(chords.filter((chord) => chord.configured));
+    return extractUniqueChords(item?.lyrics).map((name) => findChordDefinition(byName, name)).filter(Boolean);
   }, [chords, item?.lyrics]);
 
   useEffect(() => {
