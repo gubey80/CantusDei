@@ -130,9 +130,10 @@ function normalizeImportSong(item) {
   };
 }
 
-async function getOrCreateChord(name, client = prisma) {
+async function getOrCreateChord(name, client = prisma, chordCache = null) {
+  if (chordCache?.has(name)) return chordCache.get(name);
   const parts = chordParts(name);
-  return client.chord.upsert({
+  const chord = await client.chord.upsert({
     where: { name },
     update: {},
     create: {
@@ -143,13 +144,15 @@ async function getOrCreateChord(name, client = prisma) {
       configured: false,
     },
   });
+  if (chordCache) chordCache.set(name, chord);
+  return chord;
 }
 
-async function syncVersionChords(songVersionId, lyrics, client = prisma) {
+async function syncVersionChords(songVersionId, lyrics, client = prisma, options = {}) {
   const summary = summarizeChords(lyrics);
   await client.songVersionChord.deleteMany({ where: { songVersionId } });
   for (const item of summary) {
-    const chord = await getOrCreateChord(item.chord, client);
+    const chord = await getOrCreateChord(item.chord, client, options.chordCache);
     await client.songVersionChord.create({
       data: {
         songVersionId,
@@ -235,7 +238,7 @@ async function previewImportSongs(inputs) {
   });
 }
 
-async function importSong(input, client = prisma) {
+async function importSong(input, client = prisma, options = {}) {
   const songbook = await client.songbook.upsert({
     where: { code: input.songbookCode },
     update: {},
@@ -267,7 +270,7 @@ async function importSong(input, client = prisma) {
   const version = existingVersion
     ? await client.songVersion.update({ where: { id: existingVersion.id }, data: versionData })
     : await client.songVersion.create({ data: { songId: song.id, ...versionData } });
-  await syncVersionChords(version.id, input.version.lyrics, client);
+  await syncVersionChords(version.id, input.version.lyrics, client, options);
   return {
     songId: song.id,
     versionId: version.id,
@@ -275,6 +278,36 @@ async function importSong(input, client = prisma) {
     key: version.key,
     capo: version.capo,
     action: existingVersion ? "updatedVersion" : existingSong ? "addedVersion" : "createdSong",
+  };
+}
+
+async function createImportedSong(input, songbookId, client = prisma, options = {}) {
+  const song = await client.song.create({
+    data: {
+      ...(input.id ? { id: input.id } : {}),
+      songbookId,
+      title: input.title,
+      artist: input.artist,
+      listenUrl: input.listenUrl,
+      copyrightText: input.copyrightText,
+      tags: input.tags,
+    },
+  });
+  const version = await client.songVersion.create({
+    data: {
+      songId: song.id,
+      ...input.version,
+      status: input.version.reviewed ? "REVIEWED" : "DRAFT",
+    },
+  });
+  await syncVersionChords(version.id, input.version.lyrics, client, options);
+  return {
+    songId: song.id,
+    versionId: version.id,
+    title: song.title,
+    key: version.key,
+    capo: version.capo,
+    action: "createdSong",
   };
 }
 
@@ -399,7 +432,7 @@ songsRouter.post("/import/replace", requireAdmin, async (req, res, next) => {
       return res.status(400).json({ message: "El reemplazo debe contener canciones de un solo cancionero." });
     }
     const songbookCode = songbookCodes[0];
-    const result = await prisma.$transaction(async (tx) => {
+    const cleanup = await prisma.$transaction(async (tx) => {
       const songbook = await tx.songbook.upsert({
         where: { code: songbookCode },
         update: {},
@@ -413,25 +446,27 @@ songsRouter.post("/import/replace", requireAdmin, async (req, res, next) => {
         },
       });
       const removedSongs = await tx.song.deleteMany({ where: { songbookId: songbook.id } });
-      const results = [];
-      for (const item of normalized) {
-        results.push(await importSong(item, tx));
-      }
-      return { removedSetlistItems: removedSetlistItems.count, removedSongs: removedSongs.count, results };
-    }, { timeout: 60000 });
+      return { songbookId: songbook.id, removedSetlistItems: removedSetlistItems.count, removedSongs: removedSongs.count };
+    }, { timeout: 30000 });
+
+    const chordCache = new Map();
+    const results = [];
+    for (const item of normalized) {
+      results.push(await createImportedSong(item, cleanup.songbookId, prisma, { chordCache }));
+    }
 
     res.status(201).json({
-      total: result.results.length,
+      total: results.length,
       removed: {
-        songs: result.removedSongs,
-        setlistItems: result.removedSetlistItems,
+        songs: cleanup.removedSongs,
+        setlistItems: cleanup.removedSetlistItems,
       },
       summary: {
-        createdSong: result.results.filter((item) => item.action === "createdSong").length,
-        addedVersion: result.results.filter((item) => item.action === "addedVersion").length,
-        updatedVersion: result.results.filter((item) => item.action === "updatedVersion").length,
+        createdSong: results.filter((item) => item.action === "createdSong").length,
+        addedVersion: results.filter((item) => item.action === "addedVersion").length,
+        updatedVersion: results.filter((item) => item.action === "updatedVersion").length,
       },
-      results: result.results,
+      results,
     });
   } catch (error) {
     next(error);
