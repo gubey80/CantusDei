@@ -72,6 +72,15 @@ const SPANISH_ROOTS = {
   la: "A",
   si: "B",
 };
+const INTERNAL_TO_SPANISH_ROOTS = {
+  C: "Do",
+  D: "Re",
+  E: "Mi",
+  F: "Fa",
+  G: "Sol",
+  A: "La",
+  B: "Si",
+};
 const FLAT_EQUIVALENTS = {
   Db: "C#",
   Eb: "D#",
@@ -136,10 +145,11 @@ function normalizeChordForLookup(chord = "") {
   const parts = String(chord || "").trim().split("/");
   const normalized = parts.map((part) => {
     const value = part.trim().replace(/[().,;:¡!¿?]+$/g, "");
-    const spanish = value.toLowerCase().match(/^(do|re|mi|fa|sol|la|si)(#|b)?(-|m|maj7|m7|7|sus2|sus4|sus|add2|add9|dim|aug|6|9|11|13)?$/);
+    const spanish = value.toLowerCase().match(/^(do|re|mi|fa|sol|la|si)(#|b)?(-7|-|m|maj7|m7|7|sus2|sus4|sus|add2|add9|dim|aug|6|9|11|13)?$/);
     if (spanish) {
       const [, root, accidental = "", suffix = ""] = spanish;
-      return `${SPANISH_ROOTS[root]}${accidental}${suffix === "-" ? "m" : suffix}`;
+      const normalizedSuffix = suffix === "-" ? "m" : suffix.replace(/^-/, "m");
+      return `${SPANISH_ROOTS[root]}${accidental}${normalizedSuffix}`;
     }
     const english = value.match(/^([A-G])([#b]?)(m|maj7|m7|7|sus2|sus4|sus|add2|add9|dim|aug|6|9|11|13)?$/i);
     if (!english) return value;
@@ -147,6 +157,19 @@ function normalizeChordForLookup(chord = "") {
     return `${root.toUpperCase()}${accidental}${suffix}`;
   });
   return normalized.join("/");
+}
+
+function chordDisplayName(chord = "") {
+  const parts = String(chord || "").trim().split("/");
+  return parts.map((part) => {
+    const value = part.trim();
+    const match = value.match(/^([A-G])([#b]?)(.*)$/i);
+    if (!match) return value;
+    const [, rawRoot, accidental = "", rawSuffix = ""] = match;
+    const root = INTERNAL_TO_SPANISH_ROOTS[rawRoot.toUpperCase()] || rawRoot;
+    const suffix = rawSuffix === "m" ? "-" : rawSuffix.replace(/^m(?=\d)/, "-");
+    return `${root}${accidental}${suffix}`;
+  }).join("/");
 }
 
 function chordLookupMap(chords = []) {
@@ -160,6 +183,15 @@ function chordLookupMap(chords = []) {
 
 function findChordDefinition(chordByName, chordName) {
   return chordByName.get(chordName) || chordByName.get(normalizeChordForLookup(chordName)) || null;
+}
+
+function chordSearchText(chord = {}) {
+  return normalizeSearchText([
+    chord.name,
+    chord.root,
+    chordDisplayName(chord.name),
+    chordDisplayName(chord.root),
+  ].filter(Boolean).join(" "));
 }
 
 function transposeOptionsFromKey(sourceKey) {
@@ -347,6 +379,7 @@ function chordDefinition(chord, savedFrets) {
 
 function ChordDiagram({
   chord,
+  displayName = null,
   capo = 0,
   frets: savedFrets,
   barreFret = null,
@@ -356,6 +389,7 @@ function ChordDiagram({
   configuredOverride = null,
   onConfigure = null,
 }) {
+  const visibleChordName = displayName || chord;
   const frets = configuredOverride === false ? null : chordDefinition(chord, savedFrets);
   const hasBarre = configuredOverride === false ? false : Number(barreFret) > 0 && Number(barreFromString) > 0 && Number(barreToString) > 0;
   const configured = configuredOverride ?? (Array.isArray(frets) || hasBarre);
@@ -391,16 +425,16 @@ function ChordDiagram({
     <DiagramShell
       className={`diagram${configured ? "" : " is-empty"}${canConfigure ? " is-configurable" : ""}`}
       onClick={canConfigure ? () => onConfigure(chord) : undefined}
-      title={canConfigure ? `Configurar acorde ${chord}` : undefined}
+      title={canConfigure ? `Configurar acorde ${visibleChordName}` : undefined}
       type={canConfigure ? "button" : undefined}
     >
-      {showTitle ? <strong>{chord}</strong> : null}
+      {showTitle ? <strong>{visibleChordName}</strong> : null}
       <svg
         className="chord-svg"
         style={{ height: `${Math.max(116, viewHeight - 38)}px` }}
         viewBox={`0 0 156 ${viewHeight}`}
         role="img"
-        aria-label={`Acorde ${chord}`}
+        aria-label={`Acorde ${visibleChordName}`}
       >
         {showFretLabel ? (
           <text x={gridStart - 12} y={fretTop + 4} textAnchor="end" className="fret-number">
@@ -2681,7 +2715,7 @@ const CHORD_FAMILIES = [
 const CHORD_FAMILY_ROOTS = CHORD_FAMILIES.map((family) => family.root);
 
 function chordFamilyRoot(rootOrName = "") {
-  const match = String(rootOrName).trim().match(/^([A-G])/i);
+  const match = normalizeChordForLookup(rootOrName).match(/^([A-G])/i);
   return match ? match[1].toUpperCase() : "C";
 }
 
@@ -2755,7 +2789,7 @@ function chordToForm(chord, root = "C", variant = null) {
   return {
     id: chord?.id || "",
     variantId: selectedVariant?.id || chord?.defaultVariantId || "",
-    name: chord?.name || "",
+    name: chord?.name ? chordDisplayName(chord.name) : "",
     variantName: selectedVariant?.name || "Principal",
     root: chord?.root || root,
     frets: Array.isArray(selectedVariant?.frets || chord?.frets) ? (selectedVariant?.frets || chord.frets).map((fret) => fret ?? "") : ["", "", "", "", "", ""],
@@ -2771,7 +2805,7 @@ function chordToForm(chord, root = "C", variant = null) {
 
 function chordFormPayload(form) {
   return {
-    name: form.name.trim(),
+    name: normalizeChordForLookup(form.name.trim()),
     variantName: form.variantName.trim() || "Principal",
     frets: form.frets.map((fret) => {
       const value = String(fret).trim();
@@ -2819,10 +2853,10 @@ function ChordsView({ chords, families = CHORD_FAMILIES, usage, onReload, setGlo
   }, [chords, selectedRoot, capoFilter]);
 
   const searchedChords = useMemo(() => {
-    const query = chordSearch.trim().toLocaleLowerCase("es");
+    const query = normalizeSearchText(chordSearch.trim());
     if (!query) return [];
     return chords
-      .filter((chord) => chord.name.toLocaleLowerCase("es").includes(query))
+      .filter((chord) => chordSearchText(chord).includes(query))
       .sort(compareChordsByTone)
       .slice(0, 30);
   }, [chords, chordSearch]);
@@ -2830,7 +2864,8 @@ function ChordsView({ chords, families = CHORD_FAMILIES, usage, onReload, setGlo
   const exactSearchedChord = useMemo(() => {
     const query = chordSearch.trim();
     if (!query) return null;
-    return chords.find((chord) => chord.name.localeCompare(query, "es", { sensitivity: "base" }) === 0) || null;
+    const normalizedQuery = normalizeChordForLookup(query);
+    return chords.find((chord) => normalizeChordForLookup(chord.name) === normalizedQuery) || null;
   }, [chords, chordSearch]);
   const selectedChord = useMemo(() => chords.find((chord) => chord.id === form.id) || null, [chords, form.id]);
   const selectedChordVariants = useMemo(() => (
@@ -2926,9 +2961,10 @@ function ChordsView({ chords, families = CHORD_FAMILIES, usage, onReload, setGlo
   function createSearchedChord() {
     const name = chordSearch.trim();
     if (!name) return;
-    const root = chordFamilyRoot(name);
+    const normalizedName = normalizeChordForLookup(name);
+    const root = chordFamilyRoot(normalizedName);
     setSelectedRoot(root);
-    setForm({ ...EMPTY_CHORD_FORM, root, name });
+    setForm({ ...EMPTY_CHORD_FORM, root, name: chordDisplayName(normalizedName) });
     setShowChordCreator(true);
     setMessage("");
     setGlobalError("");
@@ -2937,15 +2973,16 @@ function ChordsView({ chords, families = CHORD_FAMILIES, usage, onReload, setGlo
   useEffect(() => {
     const name = String(initialChordName || "").trim();
     if (!name) return;
-    const existingChord = chords.find((chord) => chord.name.localeCompare(name, "es", { sensitivity: "base" }) === 0);
-    setChordSearch(name);
+    const normalizedName = normalizeChordForLookup(name);
+    const existingChord = chords.find((chord) => normalizeChordForLookup(chord.name) === normalizedName);
+    setChordSearch(chordDisplayName(normalizedName));
     if (existingChord) {
       editChord(existingChord);
       return;
     }
-    const root = chordFamilyRoot(name);
+    const root = chordFamilyRoot(normalizedName);
     setSelectedRoot(root);
-    setForm({ ...EMPTY_CHORD_FORM, root, name });
+    setForm({ ...EMPTY_CHORD_FORM, root, name: chordDisplayName(normalizedName) });
     setShowChordCreator(true);
     setMessage("");
     setGlobalError("");
@@ -2956,15 +2993,16 @@ function ChordsView({ chords, families = CHORD_FAMILIES, usage, onReload, setGlo
       setGlobalError("El nombre del acorde es obligatorio.");
       return;
     }
-    if (isCreateMode && chordFamilyRoot(form.name) !== selectedRoot) {
+    const normalizedFormName = normalizeChordForLookup(form.name.trim());
+    if (isCreateMode && chordFamilyRoot(normalizedFormName) !== selectedRoot) {
       setGlobalError(`El acorde debe pertenecer a la familia ${selectedFamily?.label || selectedRoot}.`);
       return;
     }
     const duplicate = !form.id ? chords.find((chord) => (
-      chord.name.localeCompare(form.name.trim(), "es", { sensitivity: "base" }) === 0
+      normalizeChordForLookup(chord.name) === normalizedFormName
     )) : null;
     if (duplicate) {
-      setGlobalError(`Ya existe el acorde ${duplicate.name}. Seleccionalo en la familia ${chordFamilyRoot(duplicate.root || duplicate.name)} para editarlo.`);
+      setGlobalError(`Ya existe el acorde ${chordDisplayName(duplicate.name)}. Seleccionalo en la familia ${chordDisplayName(chordFamilyRoot(duplicate.root || duplicate.name))} para editarlo.`);
       return;
     }
     const invalidFret = form.frets.find((fret) => {
@@ -3061,7 +3099,7 @@ function ChordsView({ chords, families = CHORD_FAMILIES, usage, onReload, setGlo
             <input
               value={chordSearch}
               onChange={(event) => setChordSearch(event.target.value)}
-              placeholder="Buscar acorde: A#, Bb, C#m7"
+              placeholder="Buscar acorde: La#, Sib, Do#-7"
             />
           </label> : null}
           <label className="chord-capo-filter">
@@ -3126,7 +3164,7 @@ function ChordsView({ chords, families = CHORD_FAMILIES, usage, onReload, setGlo
                 onClick={() => editChord(chord)}
                 type="button"
               >
-                <strong>{chord.name}</strong>
+                <strong>{chordDisplayName(chord.name)}</strong>
                 <span>{chord.configured ? "Configurado" : "Sin configurar"}</span>
                 {isAdmin && !chord.configured ? <small>Configurar</small> : null}
               </button>
@@ -3135,7 +3173,7 @@ function ChordsView({ chords, families = CHORD_FAMILIES, usage, onReload, setGlo
             {false && isAdmin && !exactSearchedChord ? (
               <button className="create-chord-result" onClick={createSearchedChord} type="button">
                 <Plus size={16} />
-                Crear "{chordSearch.trim()}"
+                Crear "{chordDisplayName(normalizeChordForLookup(chordSearch.trim()))}"
               </button>
             ) : null}
           </div>
@@ -3188,7 +3226,7 @@ function ChordsView({ chords, families = CHORD_FAMILIES, usage, onReload, setGlo
                 ));
               return (
                 <article key={chord.id} className={form.id === chord.id ? "chord-card is-active" : "chord-card"}>
-                  <strong className="chord-card-title">{chord.name}</strong>
+                  <strong className="chord-card-title">{chordDisplayName(chord.name)}</strong>
                   <div className={`chord-card-variants${variants.length > 1 ? " has-multiple" : ""}`}>
                     {variants.map((variant) => (
                       <button
@@ -3199,6 +3237,7 @@ function ChordsView({ chords, families = CHORD_FAMILIES, usage, onReload, setGlo
                       >
                         <ChordDiagram
                           chord={chord.name}
+                          displayName={chordDisplayName(chord.name)}
                           capo={Number(variant.capo || 0)}
                           frets={variant.frets}
                           barreFret={variant.barreFret}
@@ -3239,7 +3278,7 @@ function ChordsView({ chords, families = CHORD_FAMILIES, usage, onReload, setGlo
             <div className="chord-variants-panel">
               <div className="chord-variants-heading">
                 <div>
-                  <strong>Variantes de {selectedChord.name}</strong>
+                  <strong>Variantes de {chordDisplayName(selectedChord.name)}</strong>
                   <span>{selectedChordVariants.length} forma(s) configuradas</span>
                 </div>
                 <button className="secondary-action" onClick={startNewVariant} type="button"><Plus size={16} /> Nueva variante</button>
@@ -3264,7 +3303,7 @@ function ChordsView({ chords, families = CHORD_FAMILIES, usage, onReload, setGlo
 
           <div className="form-grid chord-form-grid">
             <Field label="Nombre">
-              <input value={form.name} onChange={(event) => updateForm("name", event.target.value)} placeholder="Ej: C, Cm, C7" disabled={Boolean(form.id && !form.variantId)} />
+              <input value={form.name} onChange={(event) => updateForm("name", event.target.value)} placeholder="Ej: Do, Do-, Do7" disabled={Boolean(form.id && !form.variantId)} />
             </Field>
             <Field label="Nombre de variante">
               <input value={form.variantName} onChange={(event) => updateForm("variantName", event.target.value)} placeholder="Ej: Abierta, Cejilla traste 3" />
