@@ -192,6 +192,49 @@ async function previewImportSong(input) {
   };
 }
 
+async function previewImportSongs(inputs) {
+  const songbookCodes = [...new Set(inputs.map((input) => input.songbookCode))];
+  const songbooks = await prisma.songbook.findMany({
+    where: { code: { in: songbookCodes } },
+  });
+  const songbooksByCode = new Map(songbooks.map((songbook) => [songbook.code, songbook]));
+  const existingSongs = songbooks.length
+    ? await prisma.song.findMany({
+        where: { songbookId: { in: songbooks.map((songbook) => songbook.id) } },
+        include: { versions: true, songbook: true },
+      })
+    : [];
+  const songsBySongbookAndTitle = new Map(
+    existingSongs.map((song) => [
+      `${song.songbookId}:${song.title.trim().toLocaleLowerCase()}`,
+      song,
+    ]),
+  );
+
+  return inputs.map((input) => {
+    const songbook = songbooksByCode.get(input.songbookCode);
+    const existingSong = songbook
+      ? songsBySongbookAndTitle.get(`${songbook.id}:${input.title.trim().toLocaleLowerCase()}`)
+      : null;
+    const existingVersion = existingSong?.versions?.find((version) => (
+      version.key === input.version.key && Number(version.capo || 0) === Number(input.version.capo || 0)
+    ));
+    return {
+      title: input.title,
+      artist: input.artist,
+      songbookCode: input.songbookCode,
+      songbookName: songbook?.name || songbookNameFromCode(input.songbookCode),
+      key: input.version.key,
+      capo: input.version.capo,
+      versionName: input.version.name,
+      chords: summarizeChords(input.version.lyrics).map((item) => item.chord),
+      action: existingVersion ? "UPDATE_VERSION" : existingSong ? "ADD_VERSION" : "CREATE_SONG",
+      existingSongId: existingSong?.id || null,
+      existingVersionId: existingVersion?.id || null,
+    };
+  });
+}
+
 async function importSong(input, client = prisma) {
   const songbook = await client.songbook.upsert({
     where: { code: input.songbookCode },
@@ -310,7 +353,7 @@ songsRouter.post("/import/preview", requireAdmin, async (req, res, next) => {
       if (!item.version.lyrics) current.push({ index, field: "lyrics", message: "Falta la letra." });
       return current;
     });
-    const items = await Promise.all(normalized.map(previewImportSong));
+    const items = await previewImportSongs(normalized);
     res.json({
       total: normalized.length,
       valid: errors.length === 0,
