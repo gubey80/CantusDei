@@ -90,7 +90,7 @@ const FLAT_EQUIVALENTS = {
 };
 
 function normalizeNoteName(note = "") {
-  const match = String(note).trim().match(/^([A-G])([#b]?)/i);
+  const match = normalizeChordForLookup(note).match(/^([A-G])([#b]?)/i);
   if (!match) return "";
   const root = `${match[1].toUpperCase()}${match[2] || ""}`;
   return FLAT_EQUIVALENTS[root] || root;
@@ -124,8 +124,9 @@ function preferredNoteOrder(sourceKey = "") {
   return String(sourceKey).includes("b") ? NOTE_ORDER_FLATS : NOTE_ORDER;
 }
 
-function transposeChordName(chord, steps, noteNames = NOTE_ORDER) {
-  const [body, bass] = String(chord || "").split("/");
+function transposeChordName(chord, steps, noteNames = NOTE_ORDER, display = true) {
+  const normalizedChord = normalizeChordForLookup(chord);
+  const [body, bass] = String(normalizedChord || "").split("/");
   const match = body.match(/^([A-G])([#b]?)(.*)$/i);
   if (!match) return chord;
   const [, rawRoot, accidental = "", suffix = ""] = match;
@@ -133,7 +134,8 @@ function transposeChordName(chord, steps, noteNames = NOTE_ORDER) {
   const index = NOTE_ORDER.indexOf(root);
   if (index < 0) return chord;
   const transposed = `${noteNames[(index + steps + 120) % 12]}${suffix}`;
-  return bass ? `${transposed}/${transposeChordName(bass, steps, noteNames)}` : transposed;
+  const transposedWithBass = bass ? `${transposed}/${transposeChordName(bass, steps, noteNames, false)}` : transposed;
+  return display ? chordDisplayName(transposedWithBass) : transposedWithBass;
 }
 
 function transposeLyricsBySteps(lyrics, steps, sourceKey = "") {
@@ -200,8 +202,8 @@ function transposeOptionsFromKey(sourceKey) {
   const noteNames = preferredNoteOrder(sourceKey);
   return noteNames.map((_, steps) => ({
     steps,
-    key: noteNames[(index + steps) % 12],
-    label: `${noteNames[(index + steps) % 12]} - ${semitoneLabel(steps)}`,
+    key: chordDisplayName(noteNames[(index + steps) % 12]),
+    label: `${chordDisplayName(noteNames[(index + steps) % 12])} - ${semitoneLabel(steps)}`,
   }));
 }
 
@@ -210,7 +212,7 @@ function transposeOptionFromSteps(sourceKey, steps) {
   const numericSteps = Number(steps || 0);
   if (index < 0) return null;
   const noteNames = preferredNoteOrder(sourceKey);
-  const key = noteNames[(index + numericSteps + 120) % 12];
+  const key = chordDisplayName(noteNames[(index + numericSteps + 120) % 12]);
   return {
     steps: numericSteps,
     key,
@@ -222,7 +224,7 @@ function transposeKeyBySteps(sourceKey = "", steps = 0) {
   const index = noteIndex(sourceKey);
   if (index < 0) return sourceKey;
   const noteNames = preferredNoteOrder(sourceKey);
-  return noteNames[(index + Number(steps || 0) + 120) % 12];
+  return chordDisplayName(noteNames[(index + Number(steps || 0) + 120) % 12]);
 }
 
 function normalizeSearchText(value = "") {
@@ -283,7 +285,7 @@ const MEDIUM_CHORDS = new Set(["F", "Bm", "B7", "F#m", "C#m", "Gm", "Cm", "Bb", 
 const HARD_ROOTS = new Set(["C#", "D#", "F#", "G#", "A#", "Db", "Eb", "Gb", "Ab", "Bb"]);
 
 function chordMainPart(chord = "") {
-  return String(chord).split("/")[0].trim();
+  return normalizeChordForLookup(chord).split("/")[0].trim();
 }
 
 function chordDifficultyScore(chord = "") {
