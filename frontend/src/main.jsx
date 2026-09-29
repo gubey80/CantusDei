@@ -719,10 +719,10 @@ function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic,
   }, [songs]);
 
   const filteredSongs = useMemo(() => {
-    const normalizedName = normalizeText(nameFilter);
+    const normalizedName = normalizeSearchText(nameFilter);
     return songs.filter((song) => {
       const matchesSongbook = songbookFilter === "all" || songbookCode(song) === songbookFilter;
-      const haystack = normalizeText(`${song.title} ${song.artist || ""} ${songbookName(song)}`);
+      const haystack = normalizeSearchText(`${song.title} ${song.artist || ""} ${songbookName(song)}`);
       return matchesSongbook && (!normalizedName || haystack.includes(normalizedName));
     });
   }, [songs, nameFilter, songbookFilter]);
