@@ -708,6 +708,7 @@ function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic,
   const [selectedVersionId, setSelectedVersionId] = useState("");
   const [showChords, setShowChords] = useState(true);
   const [showDiagrams, setShowDiagrams] = useState(true);
+  const [readerTransposeSteps, setReaderTransposeSteps] = useState(0);
 
   const songbooks = useMemo(() => {
     const byCode = new Map();
@@ -738,7 +739,20 @@ function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic,
     }
   }, [selectedSong, selectedVersionId]);
 
-  const usedChords = useMemo(() => extractUniqueChords(selectedVersion?.lyrics), [selectedVersion?.lyrics]);
+  useEffect(() => {
+    setReaderTransposeSteps(0);
+  }, [selectedSong?.id, selectedVersionId]);
+
+  const displayedLyrics = useMemo(() => (
+    readerTransposeSteps
+      ? transposeLyricsBySteps(selectedVersion?.lyrics || "", readerTransposeSteps, selectedVersion?.key || "")
+      : selectedVersion?.lyrics || ""
+  ), [readerTransposeSteps, selectedVersion?.lyrics, selectedVersion?.key]);
+  const displayedKey = useMemo(() => (
+    readerTransposeSteps ? transposeKeyBySteps(selectedVersion?.key || "", readerTransposeSteps) : selectedVersion?.key
+  ), [readerTransposeSteps, selectedVersion?.key]);
+  const canTransposeReader = noteIndex(selectedVersion?.key || "") >= 0;
+  const usedChords = useMemo(() => extractUniqueChords(displayedLyrics), [displayedLyrics]);
   const chordByName = useMemo(() => chordLookupMap(chords), [chords]);
   const listenUrl = normalizeMediaUrl(selectedSong?.listenUrl);
 
@@ -766,7 +780,8 @@ function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic,
               <h2>{selectedSong.title}</h2>
               {selectedVersion ? (
                 <p>
-                  Tono {selectedVersion.key}
+                  Tono {displayedKey || selectedVersion.key}
+                  {readerTransposeSteps ? ` - original ${selectedVersion.key}` : ""}
                   {selectedVersion.capo ? ` - Capo ${selectedVersion.capo}` : ""}
                   {selectedVersion.name ? ` - ${selectedVersion.name}` : ""}
                 </p>
@@ -826,6 +841,14 @@ function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic,
           </div>
 
           <div className="v2-lyrics-toolbar">
+            <div className="v2-transpose-controls" aria-label="Transponer lectura">
+              <span>{readerTransposeSteps ? `${movementLabel(readerTransposeSteps)}: ${displayedKey}` : `Tono ${displayedKey || selectedVersion?.key || "-"}`}</span>
+              <button onClick={() => setReaderTransposeSteps((value) => value - 2)} disabled={!canTransposeReader} type="button">-1 tono</button>
+              <button onClick={() => setReaderTransposeSteps((value) => value - 1)} disabled={!canTransposeReader} type="button">-1 semitono</button>
+              <button onClick={() => setReaderTransposeSteps(0)} disabled={!readerTransposeSteps} type="button">Original</button>
+              <button onClick={() => setReaderTransposeSteps((value) => value + 1)} disabled={!canTransposeReader} type="button">+1 semitono</button>
+              <button onClick={() => setReaderTransposeSteps((value) => value + 2)} disabled={!canTransposeReader} type="button">+1 tono</button>
+            </div>
             <button onClick={() => setShowChords((value) => !value)} type="button">
               {showChords ? <EyeOff size={16} /> : <Eye size={16} />}
               {showChords ? "Ocultar acordes" : "Mostrar acordes"}
@@ -833,8 +856,8 @@ function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic,
           </div>
 
           <section className="v2-lyrics-card">
-            {selectedVersion?.lyrics ? (
-              <LyricsView lyrics={selectedVersion.lyrics} showChords={showChords} />
+            {displayedLyrics ? (
+              <LyricsView lyrics={displayedLyrics} showChords={showChords} />
             ) : (
               <p className="empty-message">Cargando letra...</p>
             )}

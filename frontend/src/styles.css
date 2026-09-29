@@ -593,7 +593,31 @@ button:disabled {
 
 .v2-lyrics-toolbar {
   display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   justify-content: flex-end;
+  align-items: center;
+}
+
+.v2-transpose-controls {
+  display: flex;
+  flex: 1 1 520px;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.v2-transpose-controls span {
+  flex: 0 0 auto;
+  color: var(--secondary);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.v2-transpose-controls button {
+  flex: 0 0 auto;
 }
 
 .v2-lyrics-card {
