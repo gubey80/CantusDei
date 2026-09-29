@@ -644,6 +644,261 @@ function ReaderView({ songs, chords, selectedSong, onSelectSong, search, setSear
   );
 }
 
+function songbookName(song) {
+  return song?.songbook?.name || "Sin cancionero";
+}
+
+function songbookCode(song) {
+  return song?.songbook?.code || "sin-cancionero";
+}
+
+function V2BottomNav({ view, setView }) {
+  const items = [
+    { id: "v2-songs", label: "Canciones", icon: Music2 },
+    { id: "v2-setlists", label: "Setlist", icon: CalendarDays },
+    { id: "v2-chords", label: "Acordes", icon: Guitar },
+  ];
+
+  return (
+    <nav className="v2-bottom-nav" aria-label="Navegacion principal">
+      {items.map((item) => {
+        const Icon = item.icon;
+        return (
+          <button
+            key={item.id}
+            className={view === item.id ? "is-active" : ""}
+            onClick={() => setView(item.id)}
+            type="button"
+          >
+            <Icon size={21} />
+            <span>{item.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function V2Shell({ view, setView, children }) {
+  return (
+    <div className="v2-shell">
+      <div className="v2-screen">
+        {children}
+      </div>
+      <V2BottomNav view={view} setView={setView} />
+    </div>
+  );
+}
+
+function V2Placeholder({ title, description, actionLabel, onAction }) {
+  return (
+    <section className="v2-placeholder">
+      <span>Vista nueva</span>
+      <h2>{title}</h2>
+      <p>{description}</p>
+      {onAction ? <button onClick={onAction} type="button">{actionLabel}</button> : null}
+    </section>
+  );
+}
+
+function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic, onEditSong, isAdmin }) {
+  const [screen, setScreen] = useState("list");
+  const [nameFilter, setNameFilter] = useState("");
+  const [songbookFilter, setSongbookFilter] = useState("all");
+  const [selectedVersionId, setSelectedVersionId] = useState("");
+  const [showChords, setShowChords] = useState(true);
+  const [showDiagrams, setShowDiagrams] = useState(true);
+
+  const songbooks = useMemo(() => {
+    const byCode = new Map();
+    songs.forEach((song) => {
+      const code = songbookCode(song);
+      if (!byCode.has(code)) byCode.set(code, songbookName(song));
+    });
+    return [...byCode.entries()].sort((a, b) => a[1].localeCompare(b[1], "es"));
+  }, [songs]);
+
+  const filteredSongs = useMemo(() => {
+    const normalizedName = normalizeText(nameFilter);
+    return songs.filter((song) => {
+      const matchesSongbook = songbookFilter === "all" || songbookCode(song) === songbookFilter;
+      const haystack = normalizeText(`${song.title} ${song.artist || ""} ${songbookName(song)}`);
+      return matchesSongbook && (!normalizedName || haystack.includes(normalizedName));
+    });
+  }, [songs, nameFilter, songbookFilter]);
+
+  const selectedVersion = useMemo(() => {
+    return selectedSong?.versions?.find((version) => version.id === selectedVersionId) || selectedSong?.versions?.[0] || null;
+  }, [selectedSong, selectedVersionId]);
+
+  useEffect(() => {
+    const firstVersion = selectedSong?.versions?.[0];
+    if (!selectedSong?.versions?.some((version) => version.id === selectedVersionId)) {
+      setSelectedVersionId(firstVersion?.id || "");
+    }
+  }, [selectedSong, selectedVersionId]);
+
+  const usedChords = useMemo(() => extractUniqueChords(selectedVersion?.lyrics), [selectedVersion?.lyrics]);
+  const chordByName = useMemo(() => chordLookupMap(chords), [chords]);
+  const listenUrl = normalizeMediaUrl(selectedSong?.listenUrl);
+
+  function openSong(song) {
+    onSelectSong(song);
+    setScreen("detail");
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  }
+
+  if (screen === "detail" && selectedSong) {
+    return (
+      <section className="v2-song-detail">
+        <header className="v2-detail-header">
+          <button className="v2-back-button" onClick={() => setScreen("list")} type="button">
+            <ChevronLeft size={18} />
+            Volver al listado
+          </button>
+          <button className="v2-ghost-button" onClick={onOpenClassic} type="button">Vista clasica</button>
+        </header>
+
+        <article className="v2-reader-card">
+          <div className="v2-titlebar">
+            <div>
+              <span>{selectedSong.artist || "Sin artista"} - {songbookName(selectedSong)}</span>
+              <h2>{selectedSong.title}</h2>
+              {selectedVersion ? (
+                <p>
+                  Tono {selectedVersion.key}
+                  {selectedVersion.capo ? ` - Capo ${selectedVersion.capo}` : ""}
+                  {selectedVersion.name ? ` - ${selectedVersion.name}` : ""}
+                </p>
+              ) : null}
+            </div>
+            <div className="v2-reader-actions">
+              {listenUrl ? (
+                <a className="v2-listen-button" href={listenUrl.href} target="_blank" rel="noreferrer">
+                  <Music2 size={17} />
+                  Escuchar
+                </a>
+              ) : null}
+              {isAdmin ? <button onClick={() => onEditSong(selectedSong.id)} type="button">Editar</button> : null}
+            </div>
+          </div>
+
+          {selectedSong.versions?.length > 1 ? (
+            <div className="v2-version-strip" aria-label="Versiones disponibles">
+              {selectedSong.versions.map((version) => (
+                <VersionButton
+                  key={version.id}
+                  version={version}
+                  active={version.id === selectedVersion?.id}
+                  onClick={() => setSelectedVersionId(version.id)}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          <div className={`v2-diagram-bar${showDiagrams ? "" : " is-hidden"}`}>
+            <div className="v2-diagram-head">
+              <strong>Acordes de esta version</strong>
+              <button onClick={() => setShowDiagrams((value) => !value)} type="button">
+                {showDiagrams ? "Ocultar" : "Mostrar"}
+              </button>
+            </div>
+            {showDiagrams ? (
+              <div className="v2-diagram-scroll" aria-label="Diagramas de acordes">
+                {usedChords.map((chordName) => {
+                  const definition = findChordDefinition(chordByName, chordName);
+                  return (
+                    <ChordDiagram
+                      key={chordName}
+                      chord={chordName}
+                      capo={selectedVersion?.capo || 0}
+                      frets={definition?.configured ? definition.frets : undefined}
+                      barreFret={definition?.barreFret}
+                      barreFromString={definition?.barreFromString}
+                      barreToString={definition?.barreToString}
+                      configuredOverride={Boolean(definition?.configured)}
+                    />
+                  );
+                })}
+                {!usedChords.length ? <p className="empty-message">Esta version no tiene acordes escritos.</p> : null}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="v2-lyrics-toolbar">
+            <button onClick={() => setShowChords((value) => !value)} type="button">
+              {showChords ? <EyeOff size={16} /> : <Eye size={16} />}
+              {showChords ? "Ocultar acordes" : "Mostrar acordes"}
+            </button>
+          </div>
+
+          <section className="v2-lyrics-card">
+            {selectedVersion?.lyrics ? (
+              <LyricsView lyrics={selectedVersion.lyrics} showChords={showChords} />
+            ) : (
+              <p className="empty-message">Cargando letra...</p>
+            )}
+          </section>
+        </article>
+      </section>
+    );
+  }
+
+  return (
+    <section className="v2-song-list-page">
+      <header className="v2-hero">
+        <div>
+          <span>CantusDei</span>
+          <h2>Canciones</h2>
+          <p>Busca por cancionero o por nombre y abre la letra en una pantalla dedicada.</p>
+        </div>
+        <button className="v2-ghost-button" onClick={onOpenClassic} type="button">Vista clasica</button>
+      </header>
+
+      <div className="v2-filters">
+        <label>
+          <span>Cancionero</span>
+          <select value={songbookFilter} onChange={(event) => setSongbookFilter(event.target.value)}>
+            <option value="all">Todos</option>
+            {songbooks.map(([code, name]) => (
+              <option key={code} value={code}>{name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="v2-search">
+          <span>Buscar cancion</span>
+          <div>
+            <Search size={18} />
+            <input value={nameFilter} onChange={(event) => setNameFilter(event.target.value)} placeholder="Nombre, autor o cancionero" />
+          </div>
+        </label>
+      </div>
+
+      <div className="v2-song-list" aria-label="Lista de canciones">
+        {filteredSongs.map((song) => {
+          const firstVersion = song.versions?.[0];
+          return (
+            <button
+              key={song.id}
+              className={selectedSong?.id === song.id ? "is-active" : ""}
+              onClick={() => openSong(song)}
+              type="button"
+            >
+              <strong>{song.title}</strong>
+              <span>
+                {songbookName(song)}
+                {firstVersion?.key ? ` - Tono ${firstVersion.key}` : ""}
+                {song.versions?.length > 1 ? ` - ${song.versions.length} versiones` : ""}
+              </span>
+            </button>
+          );
+        })}
+        {!filteredSongs.length ? <p className="empty-song-list">No hay canciones con esos filtros.</p> : null}
+      </div>
+    </section>
+  );
+}
+
 const EMPTY_VERSION = {
   name: "",
   key: "C",
@@ -3872,7 +4127,7 @@ function hasLoadedLyrics(song) {
 }
 
 function App() {
-  const [view, setView] = useState("songs");
+  const [view, setView] = useState("v2-songs");
   const [currentUser, setCurrentUser] = useState(() => {
     const raw = window.localStorage.getItem("cantusdei_user");
     return raw ? JSON.parse(raw) : null;
@@ -4025,6 +4280,13 @@ function App() {
     setView("editor");
   }
 
+  function openExistingSongEditor(songId) {
+    setEditorMode("edit");
+    setEditorSelectedSongId(songId || selectedSong?.id || "");
+    setEditorSession((value) => value + 1);
+    setView("editor");
+  }
+
   function openChordConfiguration(chordName, versionId = "") {
     if (!isAdmin) {
       setError("Solo un administrador puede configurar acordes.");
@@ -4050,6 +4312,9 @@ function App() {
     chords: usage.length,
     setlists: setlists.length,
   };
+  const isV2View = view.startsWith("v2-");
+  const focusedViews = ["songs", "editor", "song-import", "chord-create", "chord-edit", "setlist-create", "setlist-manage"];
+  const hideDashboardChrome = isV2View || focusedViews.includes(view);
 
   async function login(email, password) {
     const session = await api("/users/login", {
@@ -4071,8 +4336,8 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
-      <aside className="sidebar">
+    <main className={`app-shell${isV2View ? " app-shell-v2" : ""}`}>
+      {!isV2View ? <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">CD</div>
           <div>
@@ -4105,10 +4370,10 @@ function App() {
           </CollapsibleSection>
         </nav>
         <p className="api-status">API: {API_URL}</p>
-      </aside>
+      </aside> : null}
 
       <section className="content">
-        {!["songs", "editor", "song-import", "chord-create", "chord-edit", "setlist-create", "setlist-manage"].includes(view) ? (
+        {!hideDashboardChrome ? (
           <header className="topbar">
             <div>
               <span>Base de datos central</span>
@@ -4120,7 +4385,7 @@ function App() {
 
         {error ? <div className="error-box">{error}</div> : null}
 
-        {!["songs", "editor", "song-import", "chord-create", "chord-edit", "setlist-create", "setlist-manage"].includes(view) ? (
+        {!hideDashboardChrome ? (
           <div className="stats-grid">
             <section className="stat-card"><Library size={20} /><strong>{stats.songs}</strong><span>Canciones</span></section>
             <section className="stat-card"><Music2 size={20} /><strong>{stats.versions}</strong><span>Versiones</span></section>
@@ -4129,6 +4394,39 @@ function App() {
           </div>
         ) : null}
 
+        {view === "v2-songs" && (
+          <V2Shell view={view} setView={setView}>
+            <V2SongsView
+              songs={songs}
+              chords={chords}
+              selectedSong={selectedSong}
+              onSelectSong={(song) => setSelectedSongId(song.id)}
+              onOpenClassic={() => setView("songs")}
+              onEditSong={openExistingSongEditor}
+              isAdmin={isAdmin}
+            />
+          </V2Shell>
+        )}
+        {view === "v2-setlists" && (
+          <V2Shell view={view} setView={setView}>
+            <V2Placeholder
+              title="Setlist"
+              description="Esta seccion queda preparada para la nueva experiencia. Mientras la migramos, podes abrir el gestor actual sin perder datos."
+              actionLabel={isAdmin ? "Abrir gestor actual" : ""}
+              onAction={isAdmin ? () => setView("setlist-manage") : null}
+            />
+          </V2Shell>
+        )}
+        {view === "v2-chords" && (
+          <V2Shell view={view} setView={setView}>
+            <V2Placeholder
+              title="Acordes"
+              description="Aca vamos a llevar la biblioteca de acordes al nuevo diseno, separada del buscador de canciones."
+              actionLabel="Abrir acordes actuales"
+              onAction={() => setView("chord-edit")}
+            />
+          </V2Shell>
+        )}
         {view === "songs" && (
           <ReaderView
             songs={songs}
