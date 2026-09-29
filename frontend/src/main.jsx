@@ -894,11 +894,6 @@ function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic,
                   {song.versions?.length > 1 ? ` - ${song.versions.length} versiones` : ""}
                 </span>
               </button>
-              {isAdmin ? (
-                <button className="v2-row-action" onClick={() => onEditSong(song.id)} type="button">
-                  Editar
-                </button>
-              ) : null}
             </article>
           );
         })}
