@@ -321,6 +321,13 @@ button:disabled {
   padding: 20px;
 }
 
+.v2-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .v2-hero span,
 .v2-placeholder span,
 .v2-titlebar span {
@@ -352,6 +359,7 @@ button:disabled {
 }
 
 .v2-ghost-button,
+.v2-primary-button,
 .v2-back-button,
 .v2-reader-actions button,
 .v2-listen-button,
@@ -382,6 +390,12 @@ button:disabled {
 }
 
 .v2-listen-button {
+  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.v2-primary-button {
   color: #fff;
   border-color: var(--accent);
   background: var(--accent);
@@ -441,24 +455,51 @@ button:disabled {
   overflow: hidden;
 }
 
-.v2-song-list button {
+.v2-song-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid #e1e8f1;
+  background: #fff;
+}
+
+.v2-song-list article:hover,
+.v2-song-list article.is-active {
+  background: #eef5ff;
+}
+
+.v2-song-open {
   display: grid;
   gap: 5px;
   width: 100%;
   min-height: 72px;
+  min-width: 0;
   padding: 14px 18px;
   border: 0;
-  border-bottom: 1px solid #e1e8f1;
-  background: #fff;
+  color: inherit;
+  background: transparent;
   text-align: left;
 }
 
-.v2-song-list button:hover,
-.v2-song-list button.is-active {
-  background: #eef5ff;
+.v2-row-action {
+  min-height: 36px;
+  margin-right: 14px;
+  padding: 0 12px;
+  border: 1px solid #c9d6e6;
+  border-radius: 8px;
+  color: var(--accent);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 900;
 }
 
-.v2-song-list button:last-child {
+.v2-row-action:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.v2-song-list article:last-child {
   border-bottom: 0;
 }
 
@@ -1132,6 +1173,12 @@ button.diagram {
   border-radius: 8px;
   color: var(--ink);
   background: #fff;
+}
+
+.editor-title-block {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
 }
 
 .editor-layout {
@@ -3731,11 +3778,23 @@ button.diagram {
   }
 
   .v2-reader-actions,
+  .v2-hero-actions,
   .v2-lyrics-toolbar {
     justify-content: flex-start;
   }
 
   .v2-diagram-scroll .diagram {
     flex-basis: 104px;
+  }
+
+  .v2-song-list article {
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding-bottom: 10px;
+  }
+
+  .v2-row-action {
+    justify-self: start;
+    margin: 0 0 0 18px;
   }
 }

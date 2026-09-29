@@ -701,7 +701,7 @@ function V2Placeholder({ title, description, actionLabel, onAction }) {
   );
 }
 
-function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic, onEditSong, isAdmin }) {
+function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic, onEditSong, onCreateSong, onImportSongs, isAdmin }) {
   const [screen, setScreen] = useState("list");
   const [nameFilter, setNameFilter] = useState("");
   const [songbookFilter, setSongbookFilter] = useState("all");
@@ -852,7 +852,11 @@ function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic,
           <h2>Canciones</h2>
           <p>Busca por cancionero o por nombre y abre la letra en una pantalla dedicada.</p>
         </div>
-        <button className="v2-ghost-button" onClick={onOpenClassic} type="button">Vista clasica</button>
+        <div className="v2-hero-actions">
+          {isAdmin ? <button className="v2-primary-button" onClick={onCreateSong} type="button"><Plus size={17} /> Nueva cancion</button> : null}
+          {isAdmin ? <button className="v2-ghost-button" onClick={onImportSongs} type="button"><FileText size={17} /> Importar</button> : null}
+          <button className="v2-ghost-button" onClick={onOpenClassic} type="button">Vista clasica</button>
+        </div>
       </header>
 
       <div className="v2-filters">
@@ -878,19 +882,24 @@ function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic,
         {filteredSongs.map((song) => {
           const firstVersion = song.versions?.[0];
           return (
-            <button
+            <article
               key={song.id}
               className={selectedSong?.id === song.id ? "is-active" : ""}
-              onClick={() => openSong(song)}
-              type="button"
             >
-              <strong>{song.title}</strong>
-              <span>
-                {songbookName(song)}
-                {firstVersion?.key ? ` - Tono ${firstVersion.key}` : ""}
-                {song.versions?.length > 1 ? ` - ${song.versions.length} versiones` : ""}
-              </span>
-            </button>
+              <button className="v2-song-open" onClick={() => openSong(song)} type="button">
+                <strong>{song.title}</strong>
+                <span>
+                  {songbookName(song)}
+                  {firstVersion?.key ? ` - Tono ${firstVersion.key}` : ""}
+                  {song.versions?.length > 1 ? ` - ${song.versions.length} versiones` : ""}
+                </span>
+              </button>
+              {isAdmin ? (
+                <button className="v2-row-action" onClick={() => onEditSong(song.id)} type="button">
+                  Editar
+                </button>
+              ) : null}
+            </article>
           );
         })}
         {!filteredSongs.length ? <p className="empty-song-list">No hay canciones con esos filtros.</p> : null}
@@ -1002,7 +1011,7 @@ function Field({ label, children }) {
   );
 }
 
-function SongEditorView({ songs, chords = [], selectedSong, onSelectSong, search, setSearch, onReload, setGlobalError, initialMode = "edit" }) {
+function SongEditorView({ songs, chords = [], selectedSong, onSelectSong, search, setSearch, onReload, setGlobalError, initialMode = "edit", returnAction = null }) {
   const [selectedVersionId, setSelectedVersionId] = useState("");
   const [isCreatingSong, setIsCreatingSong] = useState(initialMode === "new");
   const [isCreatingVersion, setIsCreatingVersion] = useState(initialMode === "new");
@@ -1285,7 +1294,15 @@ function SongEditorView({ songs, chords = [], selectedSong, onSelectSong, search
   return (
     <section className="work-area editor-shell">
       <div className="panel-heading editor-heading">
-        <h2>{isCreatingSong ? "Nueva cancion" : "Editar canciones"}</h2>
+        <div className="editor-title-block">
+          {returnAction ? (
+            <button className="secondary-action" onClick={returnAction.onReturn} type="button">
+              <ChevronLeft size={16} />
+              {returnAction.label}
+            </button>
+          ) : null}
+          <h2>{isCreatingSong ? "Nueva cancion" : "Editar canciones"}</h2>
+        </div>
         {!isCreatingSong ? (
         <div className="heading-actions">
           <label className="editor-songbook-filter">
@@ -4144,6 +4161,7 @@ function App() {
   const [selectedSongId, setSelectedSongId] = useState("");
   const [editorSelectedSongId, setEditorSelectedSongId] = useState("");
   const [editorMode, setEditorMode] = useState("edit");
+  const [editorReturnView, setEditorReturnView] = useState("songs");
   const [editorSession, setEditorSession] = useState(0);
   const [readerVersionFocus, setReaderVersionFocus] = useState("");
   const [chordConfigurationRequest, setChordConfigurationRequest] = useState(null);
@@ -4273,18 +4291,20 @@ function App() {
     };
   }, [editorSelectedSongSummary?.id, songDetailsById]);
 
-  function openSongEditor(mode) {
+  function openSongEditor(mode, returnView = "songs", songId = "") {
     setEditorMode(mode);
-    setEditorSelectedSongId("");
+    setEditorSelectedSongId(songId || "");
+    setEditorReturnView(returnView);
     setEditorSession((value) => value + 1);
     setView("editor");
   }
 
   function openExistingSongEditor(songId) {
-    setEditorMode("edit");
-    setEditorSelectedSongId(songId || selectedSong?.id || "");
-    setEditorSession((value) => value + 1);
-    setView("editor");
+    openSongEditor("edit", "v2-songs", songId || selectedSong?.id || "");
+  }
+
+  function returnFromSongEditor() {
+    setView(editorReturnView || "songs");
   }
 
   function openChordConfiguration(chordName, versionId = "") {
@@ -4403,6 +4423,8 @@ function App() {
               onSelectSong={(song) => setSelectedSongId(song.id)}
               onOpenClassic={() => setView("songs")}
               onEditSong={openExistingSongEditor}
+              onCreateSong={() => openSongEditor("new", "v2-songs")}
+              onImportSongs={() => setView("song-import")}
               isAdmin={isAdmin}
             />
           </V2Shell>
@@ -4452,9 +4474,14 @@ function App() {
             onReload={async (songId) => {
               await loadData(songId);
               setEditorSelectedSongId(songId || "");
+              if (songId) setSelectedSongId(songId);
             }}
             setGlobalError={setError}
             initialMode={editorMode}
+            returnAction={editorReturnView?.startsWith("v2-") ? {
+              label: "Volver a canciones",
+              onReturn: returnFromSongEditor,
+            } : null}
           />
         )}
         {view === "song-import" && isAdmin && <SongImportView onReload={loadData} setGlobalError={setError} />}
