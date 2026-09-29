@@ -611,6 +611,94 @@ button:disabled {
   padding: 28px;
 }
 
+.v2-editor-page {
+  display: grid;
+  gap: 16px;
+}
+
+.v2-editor-hero,
+.v2-edit-card {
+  border: 1px solid #d6e0ec;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.v2-editor-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 18px;
+}
+
+.v2-editor-hero span,
+.v2-edit-card header span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.v2-editor-hero h2 {
+  margin: 3px 0 0;
+  color: var(--secondary);
+  font-size: clamp(26px, 4vw, 42px);
+  line-height: 1.12;
+}
+
+.v2-editor-hero p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.v2-editor-main-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.v2-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.v2-edit-card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.v2-edit-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #dce5ef;
+}
+
+.v2-edit-card header strong {
+  color: var(--accent);
+  font-weight: 900;
+}
+
+.v2-lyrics-editor-card .lyrics-editor {
+  min-height: 420px;
+}
+
+.v2-preview-card {
+  gap: 16px;
+}
+
+.v2-preview-card .v2-lyrics-card {
+  max-height: 620px;
+}
+
 .topbar,
 .panel-heading {
   display: flex;
@@ -3741,8 +3829,11 @@ button.diagram {
 
   .v2-hero,
   .v2-titlebar,
-  .v2-detail-header {
+  .v2-detail-header,
+  .v2-editor-hero,
+  .v2-edit-card header {
     align-items: stretch;
+    display: flex;
     flex-direction: column;
   }
 
@@ -3761,6 +3852,7 @@ button.diagram {
 
   .v2-reader-actions,
   .v2-hero-actions,
+  .v2-editor-main-actions,
   .v2-lyrics-toolbar {
     justify-content: flex-start;
   }

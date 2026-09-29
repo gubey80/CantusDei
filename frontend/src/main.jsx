@@ -1599,6 +1599,533 @@ function SongEditorView({ songs, chords = [], selectedSong, onSelectSong, search
   );
 }
 
+function V2SongEditorView({ selectedSong, chords = [], onReload, setGlobalError, initialMode = "edit", onReturn }) {
+  const [selectedVersionId, setSelectedVersionId] = useState("");
+  const [isCreatingSong, setIsCreatingSong] = useState(initialMode === "new");
+  const [isCreatingVersion, setIsCreatingVersion] = useState(initialMode === "new");
+  const [songForm, setSongForm] = useState(initialMode === "new" ? EMPTY_SONG : BLANK_EDITOR_SONG);
+  const [versionForm, setVersionForm] = useState(initialMode === "new" ? EMPTY_VERSION : BLANK_EDITOR_VERSION);
+  const [selectedTransposeSteps, setSelectedTransposeSteps] = useState(0);
+  const [capoMode, setCapoMode] = useState("keepShapes");
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const selectedVersion = useMemo(() => {
+    return selectedSong?.versions?.find((version) => version.id === selectedVersionId) || selectedSong?.versions?.[0] || null;
+  }, [selectedSong, selectedVersionId]);
+  const chordByName = useMemo(() => chordLookupMap(chords), [chords]);
+  const transposeOptions = useMemo(() => transposeOptionsFromKey(selectedVersion?.key), [selectedVersion?.key]);
+  const quickTransposeOptions = useMemo(() => (
+    QUICK_TRANSPOSE_STEPS
+      .map((steps) => transposeOptionFromSteps(selectedVersion?.key, steps))
+      .filter(Boolean)
+  ), [selectedVersion?.key]);
+  const versionTransposeOptions = useMemo(() => {
+    const bySteps = new Map();
+    [...quickTransposeOptions, ...transposeOptions].forEach((option) => {
+      if (!bySteps.has(option.steps)) bySteps.set(option.steps, option);
+    });
+    return [...bySteps.values()].sort((a, b) => a.steps - b.steps);
+  }, [quickTransposeOptions, transposeOptions]);
+  const selectedTransposeOption = useMemo(
+    () => transposeOptionFromSteps(selectedVersion?.key, selectedTransposeSteps),
+    [selectedVersion?.key, selectedTransposeSteps],
+  );
+  const capoSuggestions = useMemo(() => {
+    if (capoMode !== "keepTone") return [];
+    return capoSuggestionsFor({
+      sourceLyrics: selectedVersion?.lyrics || versionForm.lyrics || "",
+      sourceKey: selectedVersion?.key || versionForm.key,
+      targetKey: versionForm.key,
+    });
+  }, [capoMode, selectedVersion?.lyrics, selectedVersion?.key, versionForm.lyrics, versionForm.key]);
+
+  useEffect(() => {
+    if (isCreatingSong) return;
+    setSongForm(selectedSong ? songToForm(selectedSong) : BLANK_EDITOR_SONG);
+    if (!selectedSong?.versions?.some((version) => version.id === selectedVersionId)) {
+      setSelectedVersionId(selectedSong?.versions?.[0]?.id || "");
+    }
+  }, [selectedSong, isCreatingSong, selectedVersionId]);
+
+  useEffect(() => {
+    if (isCreatingSong || isCreatingVersion) return;
+    setVersionForm(selectedVersion ? versionToForm(selectedVersion) : BLANK_EDITOR_VERSION);
+  }, [selectedVersion, isCreatingSong, isCreatingVersion]);
+
+  function updateSongForm(field, value) {
+    setSongForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateVersionForm(field, value) {
+    setVersionForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function startNewVersion() {
+    if (!selectedVersion) return;
+    setIsCreatingVersion(true);
+    setVersionForm(versionToForm({
+      ...selectedVersion,
+      id: undefined,
+      name: "",
+      comments: "",
+      internalNotes: "",
+      reviewed: false,
+    }));
+    setSelectedTransposeSteps(0);
+    setCapoMode("keepShapes");
+    setMessage("");
+  }
+
+  function applyTransposedVersion(steps) {
+    const normalizedSteps = Number(steps);
+    const option = transposeOptionFromSteps(selectedVersion?.key, normalizedSteps);
+    if (!option || !selectedVersion) return;
+    setSelectedTransposeSteps(normalizedSteps);
+    setVersionForm((current) => ({
+      ...current,
+      name: `Tono ${option.key}${Number(current.capo || 0) ? ` - Capo ${Number(current.capo || 0)}` : ""}`,
+      key: option.key,
+      lyrics: transposeLyricsBySteps(selectedVersion.lyrics || "", option.steps, selectedVersion.key),
+    }));
+  }
+
+  function applyCapoBehavior() {
+    const capo = Number(versionForm.capo || 0);
+    if (!capo) return;
+    const sourceKey = selectedVersion?.key || versionForm.key;
+    const sourceLyrics = selectedVersion?.lyrics || versionForm.lyrics || "";
+
+    setVersionForm((current) => {
+      if (capoMode === "keepTone") {
+        const sourceIndex = noteIndex(sourceKey);
+        const targetIndex = noteIndex(current.key);
+        const targetSteps = sourceIndex >= 0 && targetIndex >= 0 ? (targetIndex - sourceIndex + 12) % 12 : 0;
+        const playableSteps = targetSteps - capo;
+        return {
+          ...current,
+          name: `Tono ${current.key} - Capo ${capo}`,
+          lyrics: transposeLyricsBySteps(sourceLyrics, playableSteps, sourceKey),
+        };
+      }
+
+      const soundingKey = transposeKeyBySteps(current.key || sourceKey, capo);
+      return {
+        ...current,
+        name: `Tono ${soundingKey} - Capo ${capo}`,
+        key: soundingKey,
+        lyrics: current.lyrics,
+      };
+    });
+  }
+
+  function applyCapoSuggestion(suggestion) {
+    if (!suggestion) return;
+    setVersionForm((current) => ({
+      ...current,
+      capo: suggestion.capo,
+      name: `Tono ${current.key} - Capo ${suggestion.capo}`,
+      lyrics: suggestion.lyrics,
+    }));
+  }
+
+  async function runAction(action, successMessage) {
+    setSaving(true);
+    setMessage("");
+    setGlobalError("");
+    try {
+      const result = await action();
+      setMessage(successMessage);
+      return result;
+    } catch (error) {
+      setGlobalError(error.message);
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveSong() {
+    if (!selectedSong && !isCreatingSong) return;
+    if (!songForm.title.trim()) {
+      setGlobalError("El titulo de la cancion es obligatorio.");
+      return;
+    }
+    if (!versionForm.lyrics.trim() && isCreatingSong) {
+      setGlobalError("La letra de la primera version es obligatoria.");
+      return;
+    }
+
+    const saved = await runAction(async () => {
+      if (isCreatingSong) {
+        return api("/songs", {
+          method: "POST",
+          body: JSON.stringify({
+            ...songPayload(songForm),
+            version: versionPayload(versionForm),
+          }),
+        });
+      }
+      await api(`/songs/${selectedSong.id}`, {
+        method: "PUT",
+        body: JSON.stringify(songPayload(songForm)),
+      });
+      return selectedSong;
+    }, isCreatingSong ? "Cancion creada." : "Datos guardados.");
+
+    if (saved) {
+      setIsCreatingSong(false);
+      setIsCreatingVersion(false);
+      await onReload(saved.id || selectedSong?.id);
+    }
+  }
+
+  async function saveVersion() {
+    if (!selectedSong && !isCreatingSong) return;
+    if (!versionForm.lyrics.trim()) {
+      setGlobalError("La letra de la version es obligatoria.");
+      return;
+    }
+
+    const saved = await runAction(async () => {
+      if (isCreatingSong) {
+        return api("/songs", {
+          method: "POST",
+          body: JSON.stringify({
+            ...songPayload(songForm),
+            version: versionPayload(versionForm),
+          }),
+        });
+      }
+      if (isCreatingVersion) {
+        return api(`/songs/${selectedSong.id}/versions`, {
+          method: "POST",
+          body: JSON.stringify(versionPayload(versionForm)),
+        });
+      }
+      return api(`/songs/versions/${selectedVersion.id}`, {
+        method: "PUT",
+        body: JSON.stringify(versionPayload(versionForm)),
+      });
+    }, isCreatingVersion || isCreatingSong ? "Version creada." : "Version guardada.");
+
+    if (saved) {
+      setIsCreatingSong(false);
+      setIsCreatingVersion(false);
+      await onReload(isCreatingSong ? saved.id : selectedSong.id);
+      if (!isCreatingSong && saved.id) setSelectedVersionId(saved.id);
+    }
+  }
+
+  async function deleteSong() {
+    if (!selectedSong) return;
+    const confirmed = window.confirm(`Eliminar "${selectedSong.title}" y todas sus versiones?`);
+    if (!confirmed) return;
+    const deleted = await runAction(async () => {
+      await api(`/songs/${selectedSong.id}`, { method: "DELETE" });
+      return true;
+    }, "Cancion eliminada.");
+    if (deleted) {
+      await onReload("");
+      onReturn();
+    }
+  }
+
+  async function deleteVersion(versionId) {
+    if (!versionId || !selectedSong) return;
+    if (selectedSong.versions.length <= 1) {
+      setGlobalError("No se puede eliminar la unica version. Elimina la cancion completa.");
+      return;
+    }
+    const confirmed = window.confirm("Eliminar esta version?");
+    if (!confirmed) return;
+    const deleted = await runAction(async () => {
+      await api(`/songs/versions/${versionId}`, { method: "DELETE" });
+      return true;
+    }, "Version eliminada.");
+    if (deleted) await onReload(selectedSong.id);
+  }
+
+  const previewChords = extractUniqueChords(versionForm.lyrics);
+
+  if (!isCreatingSong && !selectedSong) {
+    return (
+      <section className="v2-editor-page">
+        <button className="v2-back-button" onClick={onReturn} type="button">
+          <ChevronLeft size={18} />
+          Volver a canciones
+        </button>
+        <div className="v2-placeholder">
+          <span>Editar cancion</span>
+          <h2>Cargando cancion</h2>
+          <p>Estamos abriendo los datos para editar.</p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="v2-editor-page">
+      <header className="v2-editor-hero">
+        <button className="v2-back-button" onClick={onReturn} type="button">
+          <ChevronLeft size={18} />
+          Volver a la cancion
+        </button>
+        <div>
+          <span>{isCreatingSong ? "Nueva cancion" : "Editar cancion"}</span>
+          <h2>{songForm.title || selectedSong?.title || "Cancion sin titulo"}</h2>
+          <p>Modifica datos, versiones, tono, capo, letra con acordes y link para escuchar.</p>
+        </div>
+        <div className="v2-editor-main-actions">
+          <button className="v2-primary-button" onClick={saveSong} disabled={saving || (!selectedSong && !isCreatingSong)} type="button">
+            <Save size={17} />
+            Guardar datos
+          </button>
+          <button className="v2-primary-button" onClick={saveVersion} disabled={saving || (!selectedSong && !isCreatingSong)} type="button">
+            <Save size={17} />
+            Guardar version
+          </button>
+        </div>
+      </header>
+
+      {message ? <p className="success-box">{message}</p> : null}
+
+      <div className="v2-editor-grid">
+        <section className="v2-edit-card">
+          <header>
+            <span>Datos generales</span>
+            {!isCreatingSong && selectedSong ? (
+              <button className="danger-action" onClick={deleteSong} disabled={saving} type="button">
+                <Trash2 size={16} />
+                Eliminar
+              </button>
+            ) : null}
+          </header>
+          <div className="form-grid">
+            <Field label="Cancionero">
+              <select value={songForm.songbookCode} onChange={(event) => updateSongForm("songbookCode", event.target.value)}>
+                <option value="" disabled>Seleccionar</option>
+                <option value="mayor">Cancionero Mayor</option>
+                <option value="escuela-biblica">Escuela Biblica</option>
+              </select>
+            </Field>
+            <Field label="Titulo">
+              <input value={songForm.title} onChange={(event) => updateSongForm("title", event.target.value)} />
+            </Field>
+            <Field label="Artista / autor">
+              <input value={songForm.artist} onChange={(event) => updateSongForm("artist", event.target.value)} />
+            </Field>
+            <Field label="Link para escuchar">
+              <input value={songForm.listenUrl} onChange={(event) => updateSongForm("listenUrl", event.target.value)} placeholder="https://..." />
+            </Field>
+            <Field label="Etiquetas">
+              <input value={songForm.tags} onChange={(event) => updateSongForm("tags", event.target.value)} placeholder="adoracion, cierre, comunion" />
+            </Field>
+            <Field label="Derechos de autor">
+              <textarea value={songForm.copyrightText} onChange={(event) => updateSongForm("copyrightText", event.target.value)} rows="2" />
+            </Field>
+          </div>
+        </section>
+
+        <section className="v2-edit-card">
+          <header>
+            <span>Versiones</span>
+            {!isCreatingSong && selectedSong ? (
+              <button className="secondary-action" onClick={startNewVersion} type="button">
+                <Plus size={16} />
+                Nueva version
+              </button>
+            ) : null}
+          </header>
+
+          {!isCreatingSong && selectedSong?.versions?.length ? (
+            <div className="version-admin-list">
+              {selectedSong.versions.map((version) => (
+                <button
+                  key={version.id}
+                  className={!isCreatingVersion && selectedVersion?.id === version.id ? "is-active" : ""}
+                  onClick={() => {
+                    setIsCreatingVersion(false);
+                    setSelectedVersionId(version.id);
+                  }}
+                  type="button"
+                >
+                  <span>{version.key}{version.capo ? ` - Capo ${version.capo}` : ""}</span>
+                  <small>{version.name || "Sin nombre"}</small>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {isCreatingVersion && !isCreatingSong && selectedVersion ? (
+            <section className="transpose-tool" aria-label="Crear version transpuesta">
+              <div className="transpose-tool-header">
+                <div>
+                  <span>Nueva version desde {selectedVersion.key || "tono actual"}</span>
+                  <h4>{selectedTransposeOption?.key ? `Destino: ${selectedTransposeOption.key}` : "Selecciona un movimiento"}</h4>
+                </div>
+                <label>
+                  <span>Movimiento rapido</span>
+                  <select value={selectedTransposeSteps} onChange={(event) => applyTransposedVersion(event.target.value)}>
+                    <option value="0">Tono actual</option>
+                    {quickTransposeOptions.map((option) => (
+                      <option key={option.steps} value={option.steps}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="transpose-tone-grid">
+                {transposeOptions.map((option) => (
+                  <button
+                    key={`${option.key}-${option.steps}`}
+                    className={selectedTransposeSteps === option.steps ? "is-active" : ""}
+                    onClick={() => applyTransposedVersion(option.steps)}
+                    type="button"
+                  >
+                    <span>{option.key}</span>
+                    <small>{semitoneLabel(option.steps)}</small>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <div className="form-grid version-form-grid">
+            <Field label="Nombre de version">
+              <input value={versionForm.name} onChange={(event) => updateVersionForm("name", event.target.value)} placeholder="Tono D sin capo" />
+            </Field>
+            <Field label="Tono">
+              {isCreatingVersion && !isCreatingSong && selectedVersion ? (
+                <select value={selectedTransposeSteps} onChange={(event) => applyTransposedVersion(event.target.value)}>
+                  {versionTransposeOptions.map((option) => (
+                    <option key={`${option.key}-${option.steps}`} value={option.steps}>{option.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <input value={versionForm.key} onChange={(event) => updateVersionForm("key", event.target.value)} />
+              )}
+            </Field>
+            <Field label="Capotraste">
+              <input type="number" min="0" max="12" value={versionForm.capo} onChange={(event) => updateVersionForm("capo", event.target.value)} />
+            </Field>
+            <Field label="BPM">
+              <input type="number" min="40" max="240" value={versionForm.bpm} onChange={(event) => updateVersionForm("bpm", event.target.value)} />
+            </Field>
+            <Field label="Duracion">
+              <input value={versionForm.duration} onChange={(event) => updateVersionForm("duration", event.target.value)} />
+            </Field>
+            <Field label="Dificultad">
+              <select value={versionForm.difficulty} onChange={(event) => updateVersionForm("difficulty", event.target.value)}>
+                <option value="" disabled>Seleccionar</option>
+                <option>Inicial</option>
+                <option>Media</option>
+                <option>Avanzada</option>
+              </select>
+            </Field>
+            <Field label="Responsable">
+              <input value={versionForm.owner} onChange={(event) => updateVersionForm("owner", event.target.value)} />
+            </Field>
+            <label className="check-field">
+              <input type="checkbox" checked={versionForm.reviewed} onChange={(event) => updateVersionForm("reviewed", event.target.checked)} />
+              Cancion revisada
+            </label>
+          </div>
+
+          <div className="capo-tool">
+            <label>
+              <span>Uso del capo</span>
+              <select value={capoMode} onChange={(event) => setCapoMode(event.target.value)}>
+                <option value="keepShapes">Mantener acordes y subir tono real</option>
+                <option value="keepTone">Mantener tono y simplificar acordes</option>
+              </select>
+            </label>
+            <button className="secondary-action" onClick={applyCapoBehavior} disabled={!Number(versionForm.capo || 0)} type="button">
+              Aplicar capotraste
+            </button>
+            <small>
+              {capoMode === "keepTone"
+                ? "Transpone los acordes hacia abajo para que con capo suene en el mismo tono."
+                : "Mantiene los acordes escritos y actualiza el tono real segun el capo."}
+            </small>
+            {capoMode === "keepTone" && capoSuggestions.length ? (
+              <div className="capo-suggestions" aria-label="Sugerencias de capotraste">
+                <strong>Sugerencia simple</strong>
+                {capoSuggestions.map((suggestion, index) => (
+                  <button
+                    key={suggestion.capo}
+                    className={index === 0 ? "is-recommended" : ""}
+                    onClick={() => applyCapoSuggestion(suggestion)}
+                    type="button"
+                  >
+                    <span>{index === 0 ? "Recomendada" : "Alternativa"} - Capo {suggestion.capo}</span>
+                    <small>{suggestion.difficulty} - Formas: {suggestion.chords.slice(0, 8).join(", ") || "sin acordes"}</small>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="form-grid">
+            <Field label="Comentario de la cancion">
+              <textarea value={versionForm.comments} onChange={(event) => updateVersionForm("comments", event.target.value)} rows="2" />
+            </Field>
+            <Field label="Notas internas">
+              <textarea value={versionForm.internalNotes} onChange={(event) => updateVersionForm("internalNotes", event.target.value)} rows="2" />
+            </Field>
+          </div>
+        </section>
+
+        <section className="v2-edit-card v2-lyrics-editor-card">
+          <header>
+            <span>Letra con acordes</span>
+            {!isCreatingSong && !isCreatingVersion && selectedVersion ? (
+              <button className="danger-action" onClick={() => deleteVersion(selectedVersion.id)} disabled={saving} type="button">
+                <Trash2 size={16} />
+                Eliminar version
+              </button>
+            ) : null}
+          </header>
+          <textarea
+            className="lyrics-editor"
+            value={versionForm.lyrics}
+            onChange={(event) => updateVersionForm("lyrics", event.target.value)}
+            placeholder="[Sol]Letra de la cancion..."
+            rows="18"
+          />
+        </section>
+
+        <section className="v2-edit-card v2-preview-card">
+          <header>
+            <span>Previsualizacion</span>
+            <strong>{versionForm.key || "Sin tono"}</strong>
+          </header>
+          <div className="v2-diagram-scroll" aria-label="Acordes detectados">
+            {previewChords.map((chord) => {
+              const definition = findChordDefinition(chordByName, chord);
+              return (
+                <ChordDiagram
+                  key={chord}
+                  chord={chord}
+                  capo={Number(versionForm.capo || 0)}
+                  frets={definition?.configured ? definition.frets : undefined}
+                  barreFret={definition?.barreFret}
+                  barreFromString={definition?.barreFromString}
+                  barreToString={definition?.barreToString}
+                  configuredOverride={definition ? Boolean(definition.configured) : null}
+                />
+              );
+            })}
+            {!previewChords.length ? <p className="empty-message">Sin acordes para previsualizar.</p> : null}
+          </div>
+          <div className="v2-lyrics-card">
+            <LyricsView lyrics={versionForm.lyrics} showChords />
+          </div>
+        </section>
+      </div>
+    </section>
+  );
+}
+
 const IMPORT_SAMPLE = `{
   "songs": [
     {
@@ -4294,8 +4821,12 @@ function App() {
     setView("editor");
   }
 
-  function openExistingSongEditor(songId) {
-    openSongEditor("edit", "v2-songs", songId || selectedSong?.id || "");
+  function openV2SongEditor(mode = "edit", songId = "") {
+    setEditorMode(mode);
+    setEditorSelectedSongId(songId || selectedSong?.id || "");
+    setEditorReturnView("v2-songs");
+    setEditorSession((value) => value + 1);
+    setView("v2-editor");
   }
 
   function returnFromSongEditor() {
@@ -4417,10 +4948,27 @@ function App() {
               selectedSong={selectedSong}
               onSelectSong={(song) => setSelectedSongId(song.id)}
               onOpenClassic={() => setView("songs")}
-              onEditSong={openExistingSongEditor}
-              onCreateSong={() => openSongEditor("new", "v2-songs")}
+              onEditSong={(songId) => openV2SongEditor("edit", songId)}
+              onCreateSong={() => openV2SongEditor("new")}
               onImportSongs={() => setView("song-import")}
               isAdmin={isAdmin}
+            />
+          </V2Shell>
+        )}
+        {view === "v2-editor" && isAdmin && (
+          <V2Shell view="v2-songs" setView={setView}>
+            <V2SongEditorView
+              key={editorSession}
+              chords={chords}
+              selectedSong={editorSelectedSong}
+              onReload={async (songId) => {
+                await loadData(songId);
+                setEditorSelectedSongId(songId || "");
+                if (songId) setSelectedSongId(songId);
+              }}
+              setGlobalError={setError}
+              initialMode={editorMode}
+              onReturn={() => setView("v2-songs")}
             />
           </V2Shell>
         )}
