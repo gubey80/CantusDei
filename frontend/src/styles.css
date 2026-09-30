@@ -965,6 +965,170 @@ button:disabled {
   min-width: 0;
 }
 
+.v2-chords-page {
+  display: grid;
+  gap: 16px;
+}
+
+.v2-chords-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.v2-chords-summary div {
+  display: grid;
+  gap: 3px;
+  padding: 14px;
+  border: 1px solid #d8e3f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.v2-chords-summary span,
+.v2-chords-toggle {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.v2-chords-summary strong {
+  color: var(--secondary);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.v2-chords-tools {
+  position: sticky;
+  top: 10px;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid #d8e3f0;
+  border-radius: 8px;
+  background: rgba(248, 251, 255, 0.96);
+  box-shadow: 0 12px 24px rgba(12, 35, 64, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.v2-chords-toggle {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #c9d6e6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.v2-chords-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.v2-chord-family-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 3px;
+}
+
+.v2-chord-family-strip button {
+  display: grid;
+  flex: 0 0 116px;
+  gap: 4px;
+  min-height: 56px;
+  padding: 9px 12px;
+  border: 1px solid #c9d6e6;
+  border-radius: 8px;
+  color: var(--secondary);
+  background: #fff;
+}
+
+.v2-chord-family-strip button.is-active {
+  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.v2-chord-family-strip strong {
+  font-size: 16px;
+}
+
+.v2-chord-family-strip span {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  opacity: 0.82;
+}
+
+.v2-chord-library {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 10px;
+}
+
+.v2-chord-tile {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #d6e0ec;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.v2-chord-tile header,
+.v2-chord-tile footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.v2-chord-tile header strong {
+  overflow: hidden;
+  color: var(--secondary);
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v2-chord-tile header span,
+.v2-chord-tile footer span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.v2-chord-tile .diagram {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.v2-chord-tile .diagram > span {
+  display: none;
+}
+
+.v2-chord-edit-link {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid #c9d6e6;
+  border-radius: 8px;
+  color: var(--secondary);
+  background: #f8fafc;
+  font-weight: 900;
+}
+
 .v2-editor-page {
   display: grid;
   gap: 16px;
@@ -4258,5 +4422,17 @@ button.diagram {
   .v2-setlist-song-list article .danger-action {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .v2-chords-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .v2-chords-tools {
+    grid-template-columns: 1fr;
+  }
+
+  .v2-chord-library {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
 }

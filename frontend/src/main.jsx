@@ -4239,6 +4239,144 @@ function chordFormPayload(form) {
   };
 }
 
+function V2ChordsView({ chords, families = CHORD_FAMILIES, usage = [], isAdmin, onCreateChord, onEditChord, onOpenClassic }) {
+  const availableFamilies = useMemo(() => [...families].sort((first, second) => (
+    CHORD_FAMILY_ROOTS.indexOf(first.root) - CHORD_FAMILY_ROOTS.indexOf(second.root)
+  )), [families]);
+  const [selectedRoot, setSelectedRoot] = useState(availableFamilies[0]?.root || "C");
+  const [query, setQuery] = useState("");
+  const [configuredOnly, setConfiguredOnly] = useState(false);
+  const usageByChordId = useMemo(() => new Map(usage.map((item) => [item.chord?.id, item])), [usage]);
+
+  useEffect(() => {
+    if (!availableFamilies.some((family) => family.root === selectedRoot) && availableFamilies[0]) {
+      setSelectedRoot(availableFamilies[0].root);
+    }
+  }, [availableFamilies, selectedRoot]);
+
+  const familyCounts = useMemo(() => {
+    const counts = new Map();
+    chords.forEach((chord) => {
+      const root = chordFamilyRoot(chord.root || chord.name);
+      counts.set(root, (counts.get(root) || 0) + 1);
+    });
+    return counts;
+  }, [chords]);
+
+  const selectedFamily = availableFamilies.find((family) => family.root === selectedRoot) || availableFamilies[0] || null;
+  const filteredChords = useMemo(() => {
+    const normalizedQuery = normalizeSearchText(query);
+    return chords
+      .filter((chord) => chordFamilyRoot(chord.root || chord.name) === selectedRoot)
+      .filter((chord) => configuredOnly ? Boolean(chord.configured) : true)
+      .filter((chord) => !normalizedQuery || chordSearchText(chord).includes(normalizedQuery))
+      .sort(compareChordsByTone);
+  }, [chords, selectedRoot, query, configuredOnly]);
+
+  const configuredCount = chords.filter((chord) => chord.configured).length;
+  const selectedFamilyCount = familyCounts.get(selectedRoot) || 0;
+
+  return (
+    <section className="v2-chords-page">
+      <header className="v2-hero">
+        <div>
+          <span>CantusDei</span>
+          <h2>Acordes</h2>
+          <p>Consulta rapida de diagramas, variantes y uso dentro del cancionero.</p>
+        </div>
+        <div className="v2-hero-actions">
+          {isAdmin ? <button className="v2-primary-button" onClick={onCreateChord} type="button"><Plus size={17} /> Nuevo acorde</button> : null}
+          <button className="v2-ghost-button" onClick={onOpenClassic} type="button">Edicion avanzada</button>
+        </div>
+      </header>
+
+      <section className="v2-chords-summary" aria-label="Resumen de acordes">
+        <div>
+          <span>Total</span>
+          <strong>{chords.length}</strong>
+        </div>
+        <div>
+          <span>Configurados</span>
+          <strong>{configuredCount}</strong>
+        </div>
+        <div>
+          <span>Familia activa</span>
+          <strong>{selectedFamily?.label || selectedRoot}</strong>
+        </div>
+        <div>
+          <span>Variaciones</span>
+          <strong>{selectedFamilyCount}</strong>
+        </div>
+      </section>
+
+      <div className="v2-chords-tools">
+        <label className="v2-search">
+          <span>Buscar acorde</span>
+          <div>
+            <Search size={18} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Do, Re/Fa#, Solsus4..." />
+          </div>
+        </label>
+        <label className="v2-chords-toggle">
+          <input checked={configuredOnly} onChange={(event) => setConfiguredOnly(event.target.checked)} type="checkbox" />
+          Solo configurados
+        </label>
+      </div>
+
+      <nav className="v2-chord-family-strip" aria-label="Familias de acordes">
+        {availableFamilies.map((family) => (
+          <button
+            className={family.root === selectedRoot ? "is-active" : ""}
+            key={family.root}
+            onClick={() => setSelectedRoot(family.root)}
+            type="button"
+          >
+            <strong>{family.label}</strong>
+            <span>{familyCounts.get(family.root) || 0}</span>
+          </button>
+        ))}
+      </nav>
+
+      <section className="v2-chord-library" aria-label={`Acordes de ${selectedFamily?.label || selectedRoot}`}>
+        {filteredChords.map((chord) => {
+          const variant = defaultChordVariant(chord);
+          const stat = usageByChordId.get(chord.id);
+          const configured = Boolean(variant?.configured || chord.configured);
+          const variantsCount = Array.isArray(chord.variants) ? chord.variants.length : 0;
+          return (
+            <article className="v2-chord-tile" key={chord.id}>
+              <header>
+                <strong>{chordDisplayName(chord.name)}</strong>
+                <span>{configured ? "Configurado" : "Sin configurar"}</span>
+              </header>
+              <ChordDiagram
+                chord={chord.name}
+                displayName={chordDisplayName(chord.name)}
+                capo={variant?.capo ?? chord.capo ?? 0}
+                frets={configured ? (variant?.frets || chord.frets) : undefined}
+                barreFret={variant?.barreFret ?? chord.barreFret}
+                barreFromString={variant?.barreFromString ?? chord.barreFromString}
+                barreToString={variant?.barreToString ?? chord.barreToString}
+                configuredOverride={configured}
+              />
+              <footer>
+                <span>{stat ? `${stat.count} usos` : "Sin uso"}</span>
+                <span>{variantsCount > 1 ? `${variantsCount} variantes` : "1 variante"}</span>
+              </footer>
+              {isAdmin ? (
+                <button className="v2-chord-edit-link" onClick={() => onEditChord(chord.name)} type="button">
+                  Editar
+                </button>
+              ) : null}
+            </article>
+          );
+        })}
+        {!filteredChords.length ? <p className="empty-song-list">No hay acordes con esos filtros.</p> : null}
+      </section>
+    </section>
+  );
+}
+
 function ChordsView({ chords, families = CHORD_FAMILIES, usage, onReload, setGlobalError, isAdmin, mode = "edit", initialChordName = "", returnAction = null }) {
   const isCreateMode = mode === "create";
   const availableFamilies = useMemo(() => [...families].sort((first, second) => (
@@ -5462,7 +5600,7 @@ function App() {
     setView(editorReturnView || "songs");
   }
 
-  function openChordConfiguration(chordName, versionId = "") {
+  function openChordConfiguration(chordName, versionId = "", returnView = "songs") {
     if (!isAdmin) {
       setError("Solo un administrador puede configurar acordes.");
       return;
@@ -5471,6 +5609,7 @@ function App() {
       chordName,
       songId: selectedSong?.id || "",
       versionId,
+      returnView,
     });
     setView("chord-edit");
   }
@@ -5478,7 +5617,7 @@ function App() {
   function returnFromChordConfiguration() {
     if (chordConfigurationRequest?.songId) setSelectedSongId(chordConfigurationRequest.songId);
     if (chordConfigurationRequest?.versionId) setReaderVersionFocus(chordConfigurationRequest.versionId);
-    setView("songs");
+    setView(chordConfigurationRequest?.returnView || "songs");
   }
 
   const stats = {
@@ -5617,11 +5756,20 @@ function App() {
         )}
         {view === "v2-chords" && (
           <V2Shell view={view} setView={setView}>
-            <V2Placeholder
-              title="Acordes"
-              description="Aca vamos a llevar la biblioteca de acordes al nuevo diseno, separada del buscador de canciones."
-              actionLabel="Abrir acordes actuales"
-              onAction={() => setView("chord-edit")}
+            <V2ChordsView
+              chords={chords}
+              families={chordFamilies}
+              usage={usage}
+              isAdmin={isAdmin}
+              onCreateChord={() => {
+                setChordConfigurationRequest(null);
+                setView("chord-create");
+              }}
+              onEditChord={(chordName) => openChordConfiguration(chordName, "", "v2-chords")}
+              onOpenClassic={() => {
+                setChordConfigurationRequest(null);
+                setView("chord-edit");
+              }}
             />
           </V2Shell>
         )}
