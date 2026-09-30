@@ -5037,8 +5037,16 @@ function App() {
     songRequestSequence.current = requestId;
     try {
       setError("");
-      const [songData, chordData, familyData, usageData, setlistData, tutorialData, userData] = await Promise.all([
-        api(songListUrl(search)),
+      const songData = await api(songListUrl(search));
+      if (requestId === songRequestSequence.current) {
+        setSongs(songData);
+        const preferredExists = songData.some((song) => song.id === preferredSelectedSongId);
+        if (preferredSelectedSongId && preferredExists) setSelectedSongId(preferredSelectedSongId);
+        else if (songData[0]) setSelectedSongId(songData[0].id);
+        else setSelectedSongId("");
+      }
+
+      const secondaryResults = await Promise.allSettled([
         api("/chords"),
         api("/chords/families"),
         api("/chords/usage"),
@@ -5046,19 +5054,18 @@ function App() {
         api("/tutorials"),
         api("/users"),
       ]);
-      if (requestId === songRequestSequence.current) setSongs(songData);
-      setChords(chordData);
-      setChordFamilies(familyData);
-      setUsage(usageData);
-      setSetlists(setlistData);
-      setTutorials(tutorialData);
-      setUsers(userData);
-      if (requestId === songRequestSequence.current) {
-        const preferredExists = songData.some((song) => song.id === preferredSelectedSongId);
-        if (preferredSelectedSongId && preferredExists) setSelectedSongId(preferredSelectedSongId);
-        else if (songData[0]) setSelectedSongId(songData[0].id);
-        else setSelectedSongId("");
-      }
+      if (requestId !== songRequestSequence.current) return;
+
+      const [chordData, familyData, usageData, setlistData, tutorialData, userData] = secondaryResults;
+      if (chordData.status === "fulfilled") setChords(chordData.value);
+      if (familyData.status === "fulfilled") setChordFamilies(familyData.value);
+      if (usageData.status === "fulfilled") setUsage(usageData.value);
+      if (setlistData.status === "fulfilled") setSetlists(setlistData.value);
+      if (tutorialData.status === "fulfilled") setTutorials(tutorialData.value);
+      if (userData.status === "fulfilled") setUsers(userData.value);
+
+      const secondaryError = secondaryResults.find((result) => result.status === "rejected");
+      if (secondaryError) setError(secondaryError.reason?.message || "No se pudieron cargar algunos datos.");
     } catch (loadError) {
       setError(loadError.message);
     }
