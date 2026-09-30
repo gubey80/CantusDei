@@ -2734,6 +2734,186 @@ function printSetlistPdf(form, orderItems, withChords) {
   return true;
 }
 
+function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin }) {
+  const [query, setQuery] = useState("");
+  const [screen, setScreen] = useState("list");
+  const [selectedSetlistId, setSelectedSetlistId] = useState("");
+  const [orderItems, setOrderItems] = useState([]);
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [sessionMode, setSessionMode] = useState("");
+
+  const selectedSetlist = useMemo(() => (
+    setlists.find((setlist) => setlist.id === selectedSetlistId) || null
+  ), [setlists, selectedSetlistId]);
+  const form = useMemo(() => setlistToForm(selectedSetlist), [selectedSetlist]);
+
+  const filteredSetlists = useMemo(() => {
+    const normalizedQuery = normalizeSearchText(query);
+    const sorted = [...setlists].sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (!normalizedQuery) return sorted;
+    return sorted.filter((setlist) => {
+      const songText = setlist.items?.map((item) => item.songVersion?.song?.title || "").join(" ") || "";
+      const haystack = normalizeSearchText(`${setlist.name} ${setlistDate(setlist.date)} ${setlist.leader || ""} ${songText}`);
+      return haystack.includes(normalizedQuery);
+    });
+  }, [setlists, query]);
+
+  useEffect(() => {
+    if (!selectedSetlist) return;
+    setOrderItems(setlistItemsToOrder(selectedSetlist.items));
+  }, [selectedSetlist]);
+
+  function openSetlist(setlist) {
+    setSelectedSetlistId(setlist.id);
+    setOrderItems(setlistItemsToOrder(setlist.items));
+    setMessage("");
+    setScreen("detail");
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  }
+
+  async function removeSongFromSetlist(localId) {
+    if (!selectedSetlist || !isAdmin) return;
+    const nextItems = orderItems.filter((item) => item.localId !== localId);
+    setSaving(true);
+    setGlobalError("");
+    setMessage("");
+    try {
+      await api(`/setlists/${selectedSetlist.id}`, {
+        method: "PUT",
+        body: JSON.stringify(setlistPayload(form, nextItems)),
+      });
+      setOrderItems(nextItems);
+      setMessage("Cancion quitada de la setlist.");
+      await onReload();
+    } catch (error) {
+      setGlobalError(error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openPdf(withChords) {
+    if (!orderItems.length) {
+      setGlobalError("La setlist no tiene canciones para exportar.");
+      return;
+    }
+    if (!printSetlistPdf(form, orderItems, withChords)) {
+      setGlobalError("El navegador bloqueo la ventana del PDF. Habilita las ventanas emergentes para CantusDei.");
+    }
+  }
+
+  function downloadWord(withChords) {
+    if (!orderItems.length) {
+      setGlobalError("La setlist no tiene canciones para exportar.");
+      return;
+    }
+    downloadSetlistWord(form, orderItems, withChords);
+  }
+
+  if (sessionMode && selectedSetlist) {
+    return (
+      <SetlistProjection
+        form={form}
+        items={orderItems}
+        chords={chords}
+        mode={sessionMode}
+        onClose={() => setSessionMode("")}
+        onSpeedChange={() => {}}
+      />
+    );
+  }
+
+  if (screen === "detail" && selectedSetlist) {
+    return (
+      <section className="v2-setlist-detail">
+        <header className="v2-detail-header">
+          <button className="v2-back-button" onClick={() => setScreen("list")} type="button">
+            <ChevronLeft size={18} />
+            Volver al listado
+          </button>
+        </header>
+
+        <article className="v2-setlist-card">
+          <header className="v2-titlebar">
+            <div>
+              <span>{setlistDate(selectedSetlist.date)}{selectedSetlist.leader ? ` - ${selectedSetlist.leader}` : ""}</span>
+              <h2>{selectedSetlist.name}</h2>
+              <p>{orderItems.length} cancion(es){selectedSetlist.comments ? ` - ${selectedSetlist.comments}` : ""}</p>
+            </div>
+          </header>
+
+          <div className="v2-setlist-actions">
+            <button className="projection-action" onClick={() => setSessionMode("projection")} disabled={!orderItems.length} type="button">
+              <Monitor size={17} /> Modo Proyeccion
+            </button>
+            <button className="rehearsal-action" onClick={() => setSessionMode("rehearsal")} disabled={!orderItems.length} type="button">
+              <Guitar size={17} /> Modo Ensayo
+            </button>
+            <button onClick={() => downloadWord(false)} disabled={!orderItems.length} type="button"><FileText size={16} /> Word sin acordes</button>
+            <button onClick={() => downloadWord(true)} disabled={!orderItems.length} type="button"><FileText size={16} /> Word con acordes</button>
+            <button onClick={() => openPdf(false)} disabled={!orderItems.length} type="button"><FileText size={16} /> PDF sin acordes</button>
+            <button onClick={() => openPdf(true)} disabled={!orderItems.length} type="button"><FileText size={16} /> PDF con acordes</button>
+          </div>
+
+          <section className="v2-setlist-song-list" aria-label="Canciones de la setlist">
+            {orderItems.map((item, index) => (
+              <article key={item.localId}>
+                <div className="v2-setlist-position">{index + 1}</div>
+                <div>
+                  <strong>{item.songTitle}</strong>
+                  <span>{item.artist || "Sin artista"} - Tono {item.key}{item.capo ? ` - Capo ${item.capo}` : ""}</span>
+                  {item.comment ? <small>{item.comment}</small> : null}
+                </div>
+                {isAdmin ? (
+                  <button className="danger-action" onClick={() => removeSongFromSetlist(item.localId)} disabled={saving} type="button">
+                    <Trash2 size={16} />
+                    Quitar
+                  </button>
+                ) : null}
+              </article>
+            ))}
+            {!orderItems.length ? <p className="empty-message">Esta setlist todavia no tiene canciones.</p> : null}
+          </section>
+
+          {message ? <p className="success-box">{message}</p> : null}
+        </article>
+      </section>
+    );
+  }
+
+  return (
+    <section className="v2-setlist-page">
+      <header className="v2-hero">
+        <div>
+          <span>CantusDei</span>
+          <h2>Setlists</h2>
+          <p>Busca una reunion guardada y abre su orden de canciones en una pantalla limpia.</p>
+        </div>
+      </header>
+
+      <label className="v2-search v2-setlist-search">
+        <span>Buscar setlist</span>
+        <div>
+          <Search size={18} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nombre, fecha, director o cancion" />
+        </div>
+      </label>
+
+      <div className="v2-setlist-list" aria-label="Setlists guardadas">
+        {filteredSetlists.map((setlist) => (
+          <button key={setlist.id} onClick={() => openSetlist(setlist)} type="button">
+            <strong>{setlist.name}</strong>
+            <span>{setlistDate(setlist.date)} - {setlist.items?.length || 0} canciones</span>
+            {setlist.leader ? <small>{setlist.leader}</small> : null}
+          </button>
+        ))}
+        {!filteredSetlists.length ? <p className="empty-song-list">No hay setlists con esa busqueda.</p> : null}
+      </div>
+    </section>
+  );
+}
+
 function SetlistProjection({ form, items, chords, mode, onClose, onSpeedChange }) {
   const isRehearsal = mode === "rehearsal";
   const [index, setIndex] = useState(0);
@@ -5112,11 +5292,12 @@ function App() {
         )}
         {view === "v2-setlists" && (
           <V2Shell view={view} setView={setView}>
-            <V2Placeholder
-              title="Setlist"
-              description="Esta seccion queda preparada para la nueva experiencia. Mientras la migramos, podes abrir el gestor actual sin perder datos."
-              actionLabel={isAdmin ? "Abrir gestor actual" : ""}
-              onAction={isAdmin ? () => setView("setlist-manage") : null}
+            <V2SetlistsView
+              setlists={setlists}
+              chords={chords}
+              onReload={loadData}
+              setGlobalError={setError}
+              isAdmin={isAdmin}
             />
           </V2Shell>
         )}

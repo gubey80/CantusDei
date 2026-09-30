@@ -743,6 +743,136 @@ button:disabled {
   padding: 28px;
 }
 
+.v2-setlist-page,
+.v2-setlist-detail {
+  display: grid;
+  gap: 16px;
+}
+
+.v2-setlist-search {
+  display: grid;
+  gap: 7px;
+  padding: 14px;
+  border: 1px solid #d6e0ec;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.v2-setlist-search > span {
+  color: var(--secondary);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.v2-setlist-list,
+.v2-setlist-card,
+.v2-setlist-song-list {
+  border: 1px solid #d6e0ec;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.v2-setlist-list {
+  overflow: hidden;
+}
+
+.v2-setlist-list button {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  min-height: 74px;
+  padding: 14px 18px;
+  border: 0;
+  border-bottom: 1px solid #e1e8f1;
+  background: #fff;
+  text-align: left;
+}
+
+.v2-setlist-list button:hover {
+  background: #eef5ff;
+}
+
+.v2-setlist-list button:last-child {
+  border-bottom: 0;
+}
+
+.v2-setlist-list strong,
+.v2-setlist-song-list strong {
+  color: var(--secondary);
+  font-size: 16px;
+}
+
+.v2-setlist-list span,
+.v2-setlist-song-list span,
+.v2-setlist-list small,
+.v2-setlist-song-list small {
+  color: #47617d;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.v2-setlist-card {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.v2-setlist-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.v2-setlist-actions button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid #c9d6e6;
+  border-radius: 8px;
+  color: var(--secondary);
+  background: #fff;
+  font-weight: 900;
+}
+
+.v2-setlist-song-list {
+  display: grid;
+  overflow: hidden;
+}
+
+.v2-setlist-song-list article {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e1e8f1;
+}
+
+.v2-setlist-song-list article:last-child {
+  border-bottom: 0;
+}
+
+.v2-setlist-position {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--accent);
+  font-weight: 900;
+}
+
+.v2-setlist-song-list article > div:nth-child(2) {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .v2-editor-page {
   display: grid;
   gap: 16px;
@@ -4008,5 +4138,14 @@ button.diagram {
 
   .v2-setlist-adder {
     grid-template-columns: 1fr;
+  }
+
+  .v2-setlist-song-list article {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .v2-setlist-song-list article .danger-action {
+    grid-column: 2;
+    justify-self: start;
   }
 }
