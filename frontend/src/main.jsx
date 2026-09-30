@@ -713,6 +713,8 @@ function V2SongsView({ songs, chords, setlists, selectedSong, onSelectSong, onOp
   const [selectedReaderSetlistId, setSelectedReaderSetlistId] = useState("");
   const [setlistAddMessage, setSetlistAddMessage] = useState("");
   const [addingToSetlist, setAddingToSetlist] = useState(false);
+  const [newSetlistForm, setNewSetlistForm] = useState(() => ({ ...EMPTY_SETLIST }));
+  const [creatingSetlist, setCreatingSetlist] = useState(false);
 
   const songbooks = useMemo(() => {
     const byCode = new Map();
@@ -776,6 +778,48 @@ function V2SongsView({ songs, chords, setlists, selectedSong, onSelectSong, onOp
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   }
 
+  function openCreateSetlistScreen() {
+    setNewSetlistForm({ ...EMPTY_SETLIST, name: "Domingo" });
+    setSetlistAddMessage("");
+    setScreen("create-setlist");
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  }
+
+  function handleReaderSetlistChange(event) {
+    const value = event.target.value;
+    if (value === "__create__") {
+      openCreateSetlistScreen();
+      return;
+    }
+    setSelectedReaderSetlistId(value);
+  }
+
+  function updateNewSetlistField(field, value) {
+    setNewSetlistForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function createSetlistFromSongView(event) {
+    event.preventDefault();
+    setCreatingSetlist(true);
+    setGlobalError("");
+    setSetlistAddMessage("");
+    try {
+      const createdSetlist = await api("/setlists", {
+        method: "POST",
+        body: JSON.stringify(setlistPayload(newSetlistForm, [])),
+      });
+      setSelectedReaderSetlistId(createdSetlist.id);
+      setSetlistAddMessage(`Setlist "${createdSetlist.name}" creada. Ya podes agregar esta cancion.`);
+      await onReload(selectedSong?.id);
+      setScreen("detail");
+      window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+    } catch (error) {
+      setGlobalError(error.message);
+    } finally {
+      setCreatingSetlist(false);
+    }
+  }
+
   async function ensureDisplayedVersionForSetlist() {
     if (!selectedSong || !selectedVersion) return null;
     if (!readerTransposeSteps) return selectedVersion.id;
@@ -829,6 +873,95 @@ function V2SongsView({ songs, chords, setlists, selectedSong, onSelectSong, onOp
     } finally {
       setAddingToSetlist(false);
     }
+  }
+
+  if (screen === "create-setlist") {
+    return (
+      <section className="v2-setlist-create-page">
+        <header className="v2-editor-hero">
+          <button className="v2-back-button" onClick={() => setScreen(selectedSong ? "detail" : "list")} type="button">
+            <ChevronLeft size={18} />
+            Volver a la cancion
+          </button>
+          <div>
+            <span>CantusDei</span>
+            <h2>Crear setlist</h2>
+            <p>Completa los datos del encuentro y despues agrega canciones desde la vista Canciones.</p>
+          </div>
+          <div />
+        </header>
+
+        <form className="v2-edit-card" onSubmit={createSetlistFromSongView}>
+          <header>
+            <div>
+              <span>Nuevo orden</span>
+              <strong>Datos generales</strong>
+            </div>
+          </header>
+
+          <div className="form-grid setlist-form-grid">
+            <label className="form-field">
+              <span>Nombre</span>
+              <input value={newSetlistForm.name} onChange={(event) => updateNewSetlistField("name", event.target.value)} required />
+            </label>
+            <label className="form-field">
+              <span>Fecha</span>
+              <input type="date" value={newSetlistForm.date} onChange={(event) => updateNewSetlistField("date", event.target.value)} required />
+            </label>
+            <label className="form-field">
+              <span>Director / lider</span>
+              <input value={newSetlistForm.leader} onChange={(event) => updateNewSetlistField("leader", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Cantantes</span>
+              <input value={newSetlistForm.vocals} onChange={(event) => updateNewSetlistField("vocals", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Teclado</span>
+              <input value={newSetlistForm.keyboard} onChange={(event) => updateNewSetlistField("keyboard", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Bateria</span>
+              <input value={newSetlistForm.drums} onChange={(event) => updateNewSetlistField("drums", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Guitarra 1</span>
+              <input value={newSetlistForm.guitar1} onChange={(event) => updateNewSetlistField("guitar1", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Guitarra 2</span>
+              <input value={newSetlistForm.guitar2} onChange={(event) => updateNewSetlistField("guitar2", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Bajo</span>
+              <input value={newSetlistForm.bass} onChange={(event) => updateNewSetlistField("bass", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Proyeccion</span>
+              <input value={newSetlistForm.projection} onChange={(event) => updateNewSetlistField("projection", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Sonido</span>
+              <input value={newSetlistForm.sound} onChange={(event) => updateNewSetlistField("sound", event.target.value)} />
+            </label>
+            <label className="form-field v2-wide-field">
+              <span>Comentarios</span>
+              <textarea rows="4" value={newSetlistForm.comments} onChange={(event) => updateNewSetlistField("comments", event.target.value)} />
+            </label>
+          </div>
+
+          <footer className="v2-editor-main-actions">
+            <button className="v2-ghost-button" onClick={() => setScreen(selectedSong ? "detail" : "list")} type="button">
+              Cancelar
+            </button>
+            <button className="v2-primary-button" disabled={creatingSetlist} type="submit">
+              <Save size={17} />
+              {creatingSetlist ? "Creando..." : "Crear setlist"}
+            </button>
+          </footer>
+        </form>
+      </section>
+    );
   }
 
   if (screen === "detail" && selectedSong) {
@@ -951,8 +1084,9 @@ function V2SongsView({ songs, chords, setlists, selectedSong, onSelectSong, onOp
                 <span>Agregar al orden</span>
                 <strong>{readerTransposeSteps ? `Version en ${displayedKey}` : `Version original ${displayedKey || selectedVersion?.key || ""}`}</strong>
               </div>
-              <select value={selectedReaderSetlistId} onChange={(event) => setSelectedReaderSetlistId(event.target.value)}>
+              <select value={selectedReaderSetlistId} onChange={handleReaderSetlistChange}>
                 <option value="">Seleccionar setlist</option>
+                <option value="__create__">+ Crear setlist</option>
                 {availableSetlists.map((setlist) => (
                   <option key={setlist.id} value={setlist.id}>
                     {setlist.name} - {setlistDate(setlist.date)}

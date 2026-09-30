@@ -752,9 +752,14 @@ button:disabled {
 }
 
 .v2-setlist-page,
-.v2-setlist-detail {
+.v2-setlist-detail,
+.v2-setlist-create-page {
   display: grid;
   gap: 16px;
+}
+
+.v2-wide-field {
+  grid-column: 1 / -1;
 }
 
 .v2-setlist-search {
