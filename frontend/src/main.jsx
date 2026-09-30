@@ -709,6 +709,7 @@ function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic,
   const [showChords, setShowChords] = useState(true);
   const [showDiagrams, setShowDiagrams] = useState(true);
   const [readerTransposeSteps, setReaderTransposeSteps] = useState(0);
+  const [showReaderTranspose, setShowReaderTranspose] = useState(false);
 
   const songbooks = useMemo(() => {
     const byCode = new Map();
@@ -752,6 +753,15 @@ function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic,
     readerTransposeSteps ? transposeKeyBySteps(selectedVersion?.key || "", readerTransposeSteps) : selectedVersion?.key
   ), [readerTransposeSteps, selectedVersion?.key]);
   const canTransposeReader = noteIndex(selectedVersion?.key || "") >= 0;
+  const readerToneOptions = useMemo(() => {
+    const sourceIndex = noteIndex(selectedVersion?.key || "");
+    if (sourceIndex < 0) return [];
+    const noteNames = preferredNoteOrder(selectedVersion?.key || "");
+    return noteNames.map((note, index) => ({
+      key: chordDisplayName(note),
+      steps: (index - sourceIndex + 12) % 12,
+    }));
+  }, [selectedVersion?.key]);
   const usedChords = useMemo(() => extractUniqueChords(displayedLyrics), [displayedLyrics]);
   const chordByName = useMemo(() => chordLookupMap(chords), [chords]);
   const listenUrl = normalizeMediaUrl(selectedSong?.listenUrl);
@@ -842,12 +852,33 @@ function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic,
 
           <div className="v2-lyrics-toolbar">
             <div className="v2-transpose-controls" aria-label="Transponer lectura">
-              <span>{readerTransposeSteps ? `${movementLabel(readerTransposeSteps)}: ${displayedKey}` : `Tono ${displayedKey || selectedVersion?.key || "-"}`}</span>
-              <button onClick={() => setReaderTransposeSteps((value) => value - 2)} disabled={!canTransposeReader} type="button">-1 tono</button>
-              <button onClick={() => setReaderTransposeSteps((value) => value - 1)} disabled={!canTransposeReader} type="button">-1 semitono</button>
-              <button onClick={() => setReaderTransposeSteps(0)} disabled={!readerTransposeSteps} type="button">Original</button>
-              <button onClick={() => setReaderTransposeSteps((value) => value + 1)} disabled={!canTransposeReader} type="button">+1 semitono</button>
-              <button onClick={() => setReaderTransposeSteps((value) => value + 2)} disabled={!canTransposeReader} type="button">+1 tono</button>
+              <button className="v2-tone-trigger" onClick={() => setShowReaderTranspose((value) => !value)} disabled={!canTransposeReader} type="button">
+                <span>Tono</span>
+                <strong>{displayedKey || selectedVersion?.key || "-"}</strong>
+              </button>
+              {showReaderTranspose ? (
+                <div className="v2-tone-panel">
+                  <div className="v2-tone-stepper">
+                    <button onClick={() => setReaderTransposeSteps((value) => value - 1)} type="button">-1/2 tono</button>
+                    <button onClick={() => setReaderTransposeSteps((value) => value + 1)} type="button">+1/2 tono</button>
+                  </div>
+                  <div className="v2-tone-grid" aria-label="Elegir tono">
+                    {readerToneOptions.map((option) => (
+                      <button
+                        key={`${option.key}-${option.steps}`}
+                        className={displayedKey === option.key ? "is-active" : ""}
+                        onClick={() => setReaderTransposeSteps(option.steps)}
+                        type="button"
+                      >
+                        {option.key}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="v2-tone-reset" onClick={() => setReaderTransposeSteps(0)} disabled={!readerTransposeSteps} type="button">
+                    Restaurar tono original
+                  </button>
+                </div>
+              ) : null}
             </div>
             <button onClick={() => setShowChords((value) => !value)} type="button">
               {showChords ? <EyeOff size={16} /> : <Eye size={16} />}
