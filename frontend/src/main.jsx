@@ -701,7 +701,7 @@ function V2Placeholder({ title, description, actionLabel, onAction }) {
   );
 }
 
-function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic, onEditSong, onCreateSong, onImportSongs, isAdmin }) {
+function V2SongsView({ songs, chords, setlists, selectedSong, onSelectSong, onOpenClassic, onEditSong, onCreateSong, onImportSongs, onReload, setGlobalError, isAdmin }) {
   const [screen, setScreen] = useState("list");
   const [nameFilter, setNameFilter] = useState("");
   const [songbookFilter, setSongbookFilter] = useState("all");
@@ -710,6 +710,9 @@ function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic,
   const [showDiagrams, setShowDiagrams] = useState(true);
   const [readerTransposeSteps, setReaderTransposeSteps] = useState(0);
   const [showReaderTranspose, setShowReaderTranspose] = useState(false);
+  const [selectedReaderSetlistId, setSelectedReaderSetlistId] = useState("");
+  const [setlistAddMessage, setSetlistAddMessage] = useState("");
+  const [addingToSetlist, setAddingToSetlist] = useState(false);
 
   const songbooks = useMemo(() => {
     const byCode = new Map();
@@ -765,11 +768,67 @@ function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic,
   const usedChords = useMemo(() => extractUniqueChords(displayedLyrics), [displayedLyrics]);
   const chordByName = useMemo(() => chordLookupMap(chords), [chords]);
   const listenUrl = normalizeMediaUrl(selectedSong?.listenUrl);
+  const availableSetlists = useMemo(() => [...(setlists || [])].sort((a, b) => new Date(b.date) - new Date(a.date)), [setlists]);
 
   function openSong(song) {
     onSelectSong(song);
     setScreen("detail");
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  }
+
+  async function ensureDisplayedVersionForSetlist() {
+    if (!selectedSong || !selectedVersion) return null;
+    if (!readerTransposeSteps) return selectedVersion.id;
+
+    const matchingVersion = selectedSong.versions?.find((version) => (
+      noteIndex(version.key) === noteIndex(displayedKey)
+      && Number(version.capo || 0) === Number(selectedVersion.capo || 0)
+    ));
+    if (matchingVersion) return matchingVersion.id;
+
+    const createdVersion = await api(`/songs/${selectedSong.id}/versions`, {
+      method: "POST",
+      body: JSON.stringify(versionPayload({
+        ...versionToForm(selectedVersion),
+        name: `Tono ${displayedKey}${Number(selectedVersion.capo || 0) ? ` - Capo ${Number(selectedVersion.capo || 0)}` : ""}`,
+        key: displayedKey,
+        lyrics: displayedLyrics,
+        reviewed: false,
+      })),
+    });
+    return createdVersion.id;
+  }
+
+  async function addCurrentSongToSetlist() {
+    if (!selectedReaderSetlistId || !selectedSong || !selectedVersion) return;
+    setAddingToSetlist(true);
+    setSetlistAddMessage("");
+    setGlobalError("");
+    try {
+      const targetSetlist = availableSetlists.find((setlist) => setlist.id === selectedReaderSetlistId);
+      if (!targetSetlist) throw new Error("Selecciona una setlist valida.");
+      const songVersionId = await ensureDisplayedVersionForSetlist();
+      if (!songVersionId) throw new Error("No se pudo identificar la version de la cancion.");
+      const orderItems = setlistItemsToOrder(targetSetlist.items);
+      const nextItems = [
+        ...orderItems,
+        {
+          localId: `${songVersionId}-${Date.now()}`,
+          songVersionId,
+          comment: readerTransposeSteps ? `Transpuesta a ${displayedKey}` : "",
+        },
+      ];
+      await api(`/setlists/${targetSetlist.id}`, {
+        method: "PUT",
+        body: JSON.stringify(setlistPayload(setlistToForm(targetSetlist), nextItems)),
+      });
+      setSetlistAddMessage(`Agregada a ${targetSetlist.name}.`);
+      await onReload(selectedSong.id);
+    } catch (error) {
+      setGlobalError(error.message);
+    } finally {
+      setAddingToSetlist(false);
+    }
   }
 
   if (screen === "detail" && selectedSong) {
@@ -885,6 +944,28 @@ function V2SongsView({ songs, chords, selectedSong, onSelectSong, onOpenClassic,
               {showChords ? "Ocultar acordes" : "Mostrar acordes"}
             </button>
           </div>
+
+          {isAdmin ? (
+            <div className="v2-setlist-adder">
+              <div>
+                <span>Agregar al orden</span>
+                <strong>{readerTransposeSteps ? `Version en ${displayedKey}` : `Version original ${displayedKey || selectedVersion?.key || ""}`}</strong>
+              </div>
+              <select value={selectedReaderSetlistId} onChange={(event) => setSelectedReaderSetlistId(event.target.value)}>
+                <option value="">Seleccionar setlist</option>
+                {availableSetlists.map((setlist) => (
+                  <option key={setlist.id} value={setlist.id}>
+                    {setlist.name} - {setlistDate(setlist.date)}
+                  </option>
+                ))}
+              </select>
+              <button className="v2-primary-button" onClick={addCurrentSongToSetlist} disabled={!selectedReaderSetlistId || addingToSetlist} type="button">
+                <ListPlus size={17} />
+                {addingToSetlist ? "Agregando..." : "Agregar"}
+              </button>
+              {setlistAddMessage ? <p>{setlistAddMessage}</p> : null}
+            </div>
+          ) : null}
 
           <section className="v2-lyrics-card">
             {displayedLyrics ? (
@@ -4999,12 +5080,15 @@ function App() {
             <V2SongsView
               songs={songs}
               chords={chords}
+              setlists={setlists}
               selectedSong={selectedSong}
               onSelectSong={(song) => setSelectedSongId(song.id)}
               onOpenClassic={() => setView("songs")}
               onEditSong={(songId) => openV2SongEditor("edit", songId)}
               onCreateSong={() => openV2SongEditor("new")}
               onImportSongs={() => setView("song-import")}
+              onReload={loadData}
+              setGlobalError={setError}
               isAdmin={isAdmin}
             />
           </V2Shell>
