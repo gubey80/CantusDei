@@ -20,6 +20,7 @@ import {
   Monitor,
   Maximize,
   Music2,
+  Pencil,
   Plus,
   Search,
   Save,
@@ -2876,11 +2877,23 @@ function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin })
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [sessionMode, setSessionMode] = useState("");
+  const [editForm, setEditForm] = useState(() => ({ ...EMPTY_SETLIST }));
 
   const selectedSetlist = useMemo(() => (
     setlists.find((setlist) => setlist.id === selectedSetlistId) || null
   ), [setlists, selectedSetlistId]);
   const form = useMemo(() => setlistToForm(selectedSetlist), [selectedSetlist]);
+  const visibleMusicians = useMemo(() => ([
+    ["Director", form.leader],
+    ["Voces", form.vocals],
+    ["Teclado", form.keyboard],
+    ["Bateria", form.drums],
+    ["Guitarra 1", form.guitar1],
+    ["Guitarra 2", form.guitar2],
+    ["Bajo", form.bass],
+    ["Proyeccion", form.projection],
+    ["Sonido", form.sound],
+  ].filter(([, value]) => String(value || "").trim())), [form]);
 
   const filteredSetlists = useMemo(() => {
     const normalizedQuery = normalizeSearchText(query);
@@ -2896,14 +2909,50 @@ function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin })
   useEffect(() => {
     if (!selectedSetlist) return;
     setOrderItems(setlistItemsToOrder(selectedSetlist.items));
+    setEditForm(setlistToForm(selectedSetlist));
   }, [selectedSetlist]);
 
   function openSetlist(setlist) {
     setSelectedSetlistId(setlist.id);
     setOrderItems(setlistItemsToOrder(setlist.items));
+    setEditForm(setlistToForm(setlist));
     setMessage("");
     setScreen("detail");
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  }
+
+  function openEditSetlist() {
+    if (!selectedSetlist) return;
+    setEditForm(setlistToForm(selectedSetlist));
+    setMessage("");
+    setScreen("edit");
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  }
+
+  function updateEditSetlistField(field, value) {
+    setEditForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function saveSetlistInfo(event) {
+    event.preventDefault();
+    if (!selectedSetlist || !isAdmin) return;
+    setSaving(true);
+    setGlobalError("");
+    setMessage("");
+    try {
+      await api(`/setlists/${selectedSetlist.id}`, {
+        method: "PUT",
+        body: JSON.stringify(setlistPayload(editForm, orderItems)),
+      });
+      setMessage("Datos de la setlist actualizados.");
+      await onReload();
+      setScreen("detail");
+      window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+    } catch (error) {
+      setGlobalError(error.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function removeSongFromSetlist(localId) {
@@ -2945,6 +2994,15 @@ function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin })
     downloadSetlistWord(form, orderItems, withChords);
   }
 
+  function handleExportChange(event) {
+    const value = event.target.value;
+    event.target.value = "";
+    if (value === "word-clean") downloadWord(false);
+    if (value === "word-chords") downloadWord(true);
+    if (value === "pdf-clean") openPdf(false);
+    if (value === "pdf-chords") openPdf(true);
+  }
+
   if (sessionMode && selectedSetlist) {
     return (
       <SetlistProjection
@@ -2955,6 +3013,95 @@ function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin })
         onClose={() => setSessionMode("")}
         onSpeedChange={() => {}}
       />
+    );
+  }
+
+  if (screen === "edit" && selectedSetlist) {
+    return (
+      <section className="v2-setlist-create-page">
+        <header className="v2-editor-hero">
+          <button className="v2-back-button" onClick={() => setScreen("detail")} type="button">
+            <ChevronLeft size={18} />
+            Volver a la setlist
+          </button>
+          <div>
+            <span>Setlist</span>
+            <h2>Editar datos</h2>
+            <p>Actualiza informacion del encuentro, musicos, cantantes y comentarios.</p>
+          </div>
+          <div />
+        </header>
+
+        <form className="v2-edit-card" onSubmit={saveSetlistInfo}>
+          <header>
+            <div>
+              <span>{form.date}</span>
+              <strong>{form.name}</strong>
+            </div>
+          </header>
+
+          <div className="form-grid setlist-form-grid">
+            <label className="form-field">
+              <span>Nombre</span>
+              <input value={editForm.name} onChange={(event) => updateEditSetlistField("name", event.target.value)} required />
+            </label>
+            <label className="form-field">
+              <span>Fecha</span>
+              <input type="date" value={editForm.date} onChange={(event) => updateEditSetlistField("date", event.target.value)} required />
+            </label>
+            <label className="form-field">
+              <span>Director / lider</span>
+              <input value={editForm.leader} onChange={(event) => updateEditSetlistField("leader", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Cantantes</span>
+              <input value={editForm.vocals} onChange={(event) => updateEditSetlistField("vocals", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Teclado</span>
+              <input value={editForm.keyboard} onChange={(event) => updateEditSetlistField("keyboard", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Bateria</span>
+              <input value={editForm.drums} onChange={(event) => updateEditSetlistField("drums", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Guitarra 1</span>
+              <input value={editForm.guitar1} onChange={(event) => updateEditSetlistField("guitar1", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Guitarra 2</span>
+              <input value={editForm.guitar2} onChange={(event) => updateEditSetlistField("guitar2", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Bajo</span>
+              <input value={editForm.bass} onChange={(event) => updateEditSetlistField("bass", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Proyeccion</span>
+              <input value={editForm.projection} onChange={(event) => updateEditSetlistField("projection", event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Sonido</span>
+              <input value={editForm.sound} onChange={(event) => updateEditSetlistField("sound", event.target.value)} />
+            </label>
+            <label className="form-field v2-wide-field">
+              <span>Comentarios</span>
+              <textarea rows="4" value={editForm.comments} onChange={(event) => updateEditSetlistField("comments", event.target.value)} />
+            </label>
+          </div>
+
+          <footer className="v2-editor-main-actions">
+            <button className="v2-ghost-button" onClick={() => setScreen("detail")} type="button">
+              Cancelar
+            </button>
+            <button className="v2-primary-button" disabled={saving} type="submit">
+              <Save size={17} />
+              {saving ? "Guardando..." : "Guardar cambios"}
+            </button>
+          </footer>
+        </form>
+      </section>
     );
   }
 
@@ -2969,26 +3116,28 @@ function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin })
         </header>
 
         <article className="v2-setlist-card">
-          <header className="v2-titlebar">
+          <header className="v2-titlebar v2-setlist-summary-header">
             <div>
-              <span>{setlistDate(selectedSetlist.date)}{selectedSetlist.leader ? ` - ${selectedSetlist.leader}` : ""}</span>
+              <span>{form.date}</span>
               <h2>{selectedSetlist.name}</h2>
-              <p>{orderItems.length} cancion(es){selectedSetlist.comments ? ` - ${selectedSetlist.comments}` : ""}</p>
+              <p>{orderItems.length} cancion(es)</p>
             </div>
+            <div className="v2-setlist-summary-grid">
+              {visibleMusicians.slice(0, 4).map(([role, value]) => (
+                <div key={role}>
+                  <span>{role}</span>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+              {!visibleMusicians.length ? (
+                <div>
+                  <span>Equipo</span>
+                  <strong>Sin asignar</strong>
+                </div>
+              ) : null}
+            </div>
+            {form.comments ? <p className="v2-setlist-comment">{form.comments}</p> : null}
           </header>
-
-          <div className="v2-setlist-actions">
-            <button className="projection-action" onClick={() => setSessionMode("projection")} disabled={!orderItems.length} type="button">
-              <Monitor size={17} /> Modo Proyeccion
-            </button>
-            <button className="rehearsal-action" onClick={() => setSessionMode("rehearsal")} disabled={!orderItems.length} type="button">
-              <Guitar size={17} /> Modo Ensayo
-            </button>
-            <button onClick={() => downloadWord(false)} disabled={!orderItems.length} type="button"><FileText size={16} /> Word sin acordes</button>
-            <button onClick={() => downloadWord(true)} disabled={!orderItems.length} type="button"><FileText size={16} /> Word con acordes</button>
-            <button onClick={() => openPdf(false)} disabled={!orderItems.length} type="button"><FileText size={16} /> PDF sin acordes</button>
-            <button onClick={() => openPdf(true)} disabled={!orderItems.length} type="button"><FileText size={16} /> PDF con acordes</button>
-          </div>
 
           <section className="v2-setlist-song-list" aria-label="Canciones de la setlist">
             {orderItems.map((item, index) => (
@@ -3011,6 +3160,30 @@ function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin })
           </section>
 
           {message ? <p className="success-box">{message}</p> : null}
+
+          <footer className="v2-setlist-bottom-actions">
+            <button className="projection-action" onClick={() => setSessionMode("projection")} disabled={!orderItems.length} type="button">
+              <Monitor size={17} /> Proyeccion
+            </button>
+            <button className="rehearsal-action" onClick={() => setSessionMode("rehearsal")} disabled={!orderItems.length} type="button">
+              <Guitar size={17} /> Ensayo
+            </button>
+            {isAdmin ? (
+              <button onClick={openEditSetlist} type="button">
+                <Pencil size={17} /> Editar setlist
+              </button>
+            ) : null}
+            <label className="v2-export-menu">
+              <span>Exportar</span>
+              <select defaultValue="" onChange={handleExportChange} disabled={!orderItems.length}>
+                <option value="" disabled>Word / PDF</option>
+                <option value="word-clean">Word sin acordes</option>
+                <option value="word-chords">Word con acordes</option>
+                <option value="pdf-clean">PDF sin acordes</option>
+                <option value="pdf-chords">PDF con acordes</option>
+              </select>
+            </label>
+          </footer>
         </article>
       </section>
     );

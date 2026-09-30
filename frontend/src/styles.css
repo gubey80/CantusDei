@@ -831,13 +831,75 @@ button:disabled {
   padding: 18px;
 }
 
-.v2-setlist-actions {
+.v2-setlist-summary-header {
+  align-items: start;
+}
+
+.v2-setlist-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 8px;
+  min-width: min(100%, 360px);
+}
+
+.v2-setlist-summary-grid div {
+  display: grid;
+  gap: 2px;
+  padding: 10px;
+  border: 1px solid #d9e4f1;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.v2-setlist-summary-grid span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.v2-setlist-summary-grid strong {
+  overflow: hidden;
+  color: var(--secondary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v2-setlist-comment {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0;
+  padding-top: 6px;
+  color: #47617d;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.v2-setlist-actions,
+.v2-setlist-bottom-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.v2-setlist-actions button {
+.v2-setlist-bottom-actions {
+  position: sticky;
+  bottom: 76px;
+  z-index: 12;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 12px;
+  border: 1px solid #d8e2ef;
+  border-radius: 8px;
+  background: rgba(248, 251, 255, 0.97);
+  box-shadow: 0 -12px 24px rgba(12, 35, 64, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.v2-setlist-actions button,
+.v2-setlist-bottom-actions button,
+.v2-export-menu select {
   display: inline-flex;
   gap: 8px;
   align-items: center;
@@ -849,6 +911,23 @@ button:disabled {
   color: var(--secondary);
   background: #fff;
   font-weight: 900;
+}
+
+.v2-export-menu {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.v2-export-menu span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.v2-export-menu select {
+  min-width: 150px;
 }
 
 .v2-setlist-song-list {
@@ -4151,6 +4230,25 @@ button.diagram {
 
   .v2-setlist-adder {
     grid-template-columns: 1fr;
+  }
+
+  .v2-setlist-summary-grid {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .v2-setlist-bottom-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .v2-export-menu {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .v2-export-menu select {
+    width: 100%;
   }
 
   .v2-setlist-song-list article {
