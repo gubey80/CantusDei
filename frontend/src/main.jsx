@@ -702,7 +702,7 @@ function V2Placeholder({ title, description, actionLabel, onAction }) {
   );
 }
 
-function V2SongsView({ songs, chords, setlists, selectedSong, onSelectSong, onOpenClassic, onEditSong, onCreateSong, onImportSongs, onReload, setGlobalError, isAdmin }) {
+function V2SongsView({ songs, songsLoading, chords, setlists, selectedSong, onSelectSong, onOpenClassic, onEditSong, onCreateSong, onImportSongs, onReload, setGlobalError, isAdmin }) {
   const [screen, setScreen] = useState("list");
   const [nameFilter, setNameFilter] = useState("");
   const [songbookFilter, setSongbookFilter] = useState("all");
@@ -1149,7 +1149,17 @@ function V2SongsView({ songs, chords, setlists, selectedSong, onSelectSong, onOp
       </div>
 
       <div className="v2-song-list" aria-label="Lista de canciones">
-        {filteredSongs.map((song) => {
+        {songsLoading && !songs.length ? (
+          <div className="v2-song-loading" role="status" aria-live="polite">
+            <div className="v2-music-loader" aria-hidden="true">
+              <span>♪</span>
+              <span>♫</span>
+              <span>♬</span>
+            </div>
+            <strong>Cargando tu cancionero..</strong>
+            <p>Estamos preparando la lista de canciones.</p>
+          </div>
+        ) : filteredSongs.map((song) => {
           const firstVersion = song.versions?.[0];
           return (
             <article
@@ -1167,7 +1177,7 @@ function V2SongsView({ songs, chords, setlists, selectedSong, onSelectSong, onOp
             </article>
           );
         })}
-        {!filteredSongs.length ? <p className="empty-song-list">No hay canciones con esos filtros.</p> : null}
+        {!songsLoading && !filteredSongs.length ? <p className="empty-song-list">No hay canciones con esos filtros.</p> : null}
       </div>
     </section>
   );
@@ -5464,6 +5474,7 @@ function App() {
     return raw ? JSON.parse(raw) : null;
   });
   const [songs, setSongs] = useState(() => readCachedSongSummaries());
+  const [songListLoading, setSongListLoading] = useState(() => readCachedSongSummaries().length === 0);
   const [chords, setChords] = useState([]);
   const [chordFamilies, setChordFamilies] = useState([]);
   const [usage, setUsage] = useState([]);
@@ -5505,6 +5516,7 @@ function App() {
     songRequestSequence.current = requestId;
     try {
       setError("");
+      setSongListLoading(true);
       const songData = await api(songListUrl(searchValue));
       if (requestId !== songRequestSequence.current) return [];
       applySongSummaries(songData, preferredSelectedSongId, searchValue);
@@ -5512,6 +5524,8 @@ function App() {
     } catch (loadError) {
       setError(loadError.message);
       return [];
+    } finally {
+      if (requestId === songRequestSequence.current) setSongListLoading(false);
     }
   }
 
@@ -5528,8 +5542,12 @@ function App() {
         api(songListUrl(search)).then((songData) => {
           if (requestId === songRequestSequence.current) {
             applySongSummaries(songData, preferredSelectedSongId, search);
+            setSongListLoading(false);
           }
           return songData;
+        }).catch((loadError) => {
+          if (requestId === songRequestSequence.current) setSongListLoading(false);
+          throw loadError;
         }),
         api("/chords").then(applyIfCurrent(setChords)),
         api("/chords/families").then(applyIfCurrent(setChordFamilies)),
@@ -5744,6 +5762,7 @@ function App() {
           <V2Shell view={view} setView={setView}>
             <V2SongsView
               songs={songs}
+              songsLoading={songListLoading}
               chords={chords}
               setlists={setlists}
               selectedSong={selectedSong}
