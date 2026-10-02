@@ -23,12 +23,49 @@ const setlistSchema = z.object({
 setlistsRouter.get("/", async (req, res, next) => {
   try {
     const from = req.query.from ? new Date(String(req.query.from)) : undefined;
+    const summary = ["1", "true", "yes"].includes(String(req.query.summary || "").toLowerCase());
     const setlists = await prisma.setlist.findMany({
       where: from ? { date: { gte: from } } : {},
       orderBy: { date: "asc" },
-      include: { items: { orderBy: { position: "asc" }, include: { songVersion: { include: { song: true } } } } },
+      include: {
+        items: {
+          orderBy: { position: "asc" },
+          include: {
+            songVersion: summary
+              ? {
+                  select: {
+                    id: true,
+                    name: true,
+                    key: true,
+                    capo: true,
+                    rehearsalSpeed: true,
+                    song: { select: { id: true, title: true, artist: true } },
+                  },
+                }
+              : { include: { song: true } },
+          },
+        },
+      },
     });
     res.json(setlists);
+  } catch (error) {
+    next(error);
+  }
+});
+
+setlistsRouter.get("/:id", async (req, res, next) => {
+  try {
+    const setlist = await prisma.setlist.findUnique({
+      where: { id: req.params.id },
+      include: {
+        items: {
+          orderBy: { position: "asc" },
+          include: { songVersion: { include: { song: true } } },
+        },
+      },
+    });
+    if (!setlist) return res.status(404).json({ message: "Setlist no encontrada." });
+    res.json(setlist);
   } catch (error) {
     next(error);
   }

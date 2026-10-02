@@ -2878,10 +2878,13 @@ function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin })
   const [saving, setSaving] = useState(false);
   const [sessionMode, setSessionMode] = useState("");
   const [editForm, setEditForm] = useState(() => ({ ...EMPTY_SETLIST }));
+  const [selectedSetlistDetails, setSelectedSetlistDetails] = useState(null);
 
   const selectedSetlist = useMemo(() => (
-    setlists.find((setlist) => setlist.id === selectedSetlistId) || null
-  ), [setlists, selectedSetlistId]);
+    selectedSetlistDetails?.id === selectedSetlistId
+      ? selectedSetlistDetails
+      : setlists.find((setlist) => setlist.id === selectedSetlistId) || null
+  ), [selectedSetlistDetails, setlists, selectedSetlistId]);
   const form = useMemo(() => setlistToForm(selectedSetlist), [selectedSetlist]);
   const visibleMusicians = useMemo(() => ([
     ["Director", form.leader],
@@ -2912,13 +2915,22 @@ function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin })
     setEditForm(setlistToForm(selectedSetlist));
   }, [selectedSetlist]);
 
-  function openSetlist(setlist) {
+  async function openSetlist(setlist) {
     setSelectedSetlistId(setlist.id);
+    setSelectedSetlistDetails(null);
     setOrderItems(setlistItemsToOrder(setlist.items));
     setEditForm(setlistToForm(setlist));
     setMessage("");
     setScreen("detail");
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+    try {
+      const fullSetlist = await api(`/setlists/${setlist.id}`);
+      setSelectedSetlistDetails(fullSetlist);
+      setOrderItems(setlistItemsToOrder(fullSetlist.items));
+      setEditForm(setlistToForm(fullSetlist));
+    } catch (error) {
+      setGlobalError(error.message);
+    }
   }
 
   function openEditSetlist() {
@@ -5421,6 +5433,26 @@ function songListUrl(searchValue = "") {
   return `/songs?${params.toString()}`;
 }
 
+const SONG_SUMMARY_CACHE_KEY = "cantusdei_song_summaries_v2";
+
+function readCachedSongSummaries() {
+  try {
+    const cached = JSON.parse(window.localStorage.getItem(SONG_SUMMARY_CACHE_KEY) || "[]");
+    return Array.isArray(cached) ? cached : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCachedSongSummaries(songData, searchValue = "") {
+  if (String(searchValue || "").trim()) return;
+  try {
+    window.localStorage.setItem(SONG_SUMMARY_CACHE_KEY, JSON.stringify(songData));
+  } catch {
+    // Cache is only a startup accelerator; ignore quota/private-mode failures.
+  }
+}
+
 function hasLoadedLyrics(song) {
   return Boolean(song?.__detailsLoaded || song?.versions?.some((version) => Object.prototype.hasOwnProperty.call(version, "lyrics")));
 }
@@ -5431,7 +5463,7 @@ function App() {
     const raw = window.localStorage.getItem("cantusdei_user");
     return raw ? JSON.parse(raw) : null;
   });
-  const [songs, setSongs] = useState([]);
+  const [songs, setSongs] = useState(() => readCachedSongSummaries());
   const [chords, setChords] = useState([]);
   const [chordFamilies, setChordFamilies] = useState([]);
   const [usage, setUsage] = useState([]);
@@ -5441,6 +5473,7 @@ function App() {
   const [songDetailsById, setSongDetailsById] = useState({});
   const [search, setSearch] = useState("");
   const [selectedSongId, setSelectedSongId] = useState("");
+  const [selectedSongDetailRequested, setSelectedSongDetailRequested] = useState(false);
   const [editorSelectedSongId, setEditorSelectedSongId] = useState("");
   const [editorMode, setEditorMode] = useState("edit");
   const [editorReturnView, setEditorReturnView] = useState("songs");
@@ -5458,6 +5491,15 @@ function App() {
     setSongs((current) => current.map((item) => (item.id === song.id ? { ...item, ...detailedSong } : item)));
   }
 
+  function applySongSummaries(songData, preferredSelectedSongId = selectedSongId, searchValue = search) {
+    setSongs(songData);
+    writeCachedSongSummaries(songData, searchValue);
+    const preferredExists = songData.some((song) => song.id === preferredSelectedSongId);
+    if (preferredSelectedSongId && preferredExists) setSelectedSongId(preferredSelectedSongId);
+    else if (songData[0]) setSelectedSongId(songData[0].id);
+    else setSelectedSongId("");
+  }
+
   async function loadSongs(preferredSelectedSongId = selectedSongId, searchValue = search) {
     const requestId = songRequestSequence.current + 1;
     songRequestSequence.current = requestId;
@@ -5465,11 +5507,7 @@ function App() {
       setError("");
       const songData = await api(songListUrl(searchValue));
       if (requestId !== songRequestSequence.current) return [];
-      setSongs(songData);
-      const preferredExists = songData.some((song) => song.id === preferredSelectedSongId);
-      if (preferredSelectedSongId && preferredExists) setSelectedSongId(preferredSelectedSongId);
-      else if (songData[0]) setSelectedSongId(songData[0].id);
-      else setSelectedSongId("");
+      applySongSummaries(songData, preferredSelectedSongId, searchValue);
       return songData;
     } catch (loadError) {
       setError(loadError.message);
@@ -5480,37 +5518,30 @@ function App() {
   async function loadData(preferredSelectedSongId = selectedSongId) {
     const requestId = songRequestSequence.current + 1;
     songRequestSequence.current = requestId;
+    const applyIfCurrent = (setter) => (data) => {
+      if (requestId === songRequestSequence.current) setter(data);
+      return data;
+    };
     try {
       setError("");
-      const songData = await api(songListUrl(search));
-      if (requestId === songRequestSequence.current) {
-        setSongs(songData);
-        const preferredExists = songData.some((song) => song.id === preferredSelectedSongId);
-        if (preferredSelectedSongId && preferredExists) setSelectedSongId(preferredSelectedSongId);
-        else if (songData[0]) setSelectedSongId(songData[0].id);
-        else setSelectedSongId("");
-      }
-
-      const secondaryResults = await Promise.allSettled([
-        api("/chords"),
-        api("/chords/families"),
-        api("/chords/usage"),
-        api("/setlists"),
-        api("/tutorials"),
-        api("/users"),
+      const initialResults = await Promise.allSettled([
+        api(songListUrl(search)).then((songData) => {
+          if (requestId === songRequestSequence.current) {
+            applySongSummaries(songData, preferredSelectedSongId, search);
+          }
+          return songData;
+        }),
+        api("/chords").then(applyIfCurrent(setChords)),
+        api("/chords/families").then(applyIfCurrent(setChordFamilies)),
+        api("/chords/usage").then(applyIfCurrent(setUsage)),
+        api("/setlists?summary=1").then(applyIfCurrent(setSetlists)),
+        api("/tutorials").then(applyIfCurrent(setTutorials)),
+        api("/users").then(applyIfCurrent(setUsers)),
       ]);
       if (requestId !== songRequestSequence.current) return;
 
-      const [chordData, familyData, usageData, setlistData, tutorialData, userData] = secondaryResults;
-      if (chordData.status === "fulfilled") setChords(chordData.value);
-      if (familyData.status === "fulfilled") setChordFamilies(familyData.value);
-      if (usageData.status === "fulfilled") setUsage(usageData.value);
-      if (setlistData.status === "fulfilled") setSetlists(setlistData.value);
-      if (tutorialData.status === "fulfilled") setTutorials(tutorialData.value);
-      if (userData.status === "fulfilled") setUsers(userData.value);
-
-      const secondaryError = secondaryResults.find((result) => result.status === "rejected");
-      if (secondaryError) setError(secondaryError.reason?.message || "No se pudieron cargar algunos datos.");
+      const initialError = initialResults.find((result) => result.status === "rejected");
+      if (initialError) setError(initialError.reason?.message || "No se pudieron cargar algunos datos.");
     } catch (loadError) {
       setError(loadError.message);
     }
@@ -5550,7 +5581,8 @@ function App() {
 
   useEffect(() => {
     const songId = selectedSongSummary?.id;
-    if (!songId || hasLoadedLyrics(songDetailsById[songId])) return undefined;
+    const shouldLoadDetails = view !== "v2-songs" || selectedSongDetailRequested;
+    if (!shouldLoadDetails || !songId || hasLoadedLyrics(songDetailsById[songId])) return undefined;
     let active = true;
     api(`/songs/${songId}`)
       .then((song) => {
@@ -5562,7 +5594,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, [selectedSongSummary?.id, songDetailsById]);
+  }, [selectedSongSummary?.id, songDetailsById, selectedSongDetailRequested, view]);
 
   useEffect(() => {
     const songId = editorSelectedSongSummary?.id;
@@ -5715,7 +5747,10 @@ function App() {
               chords={chords}
               setlists={setlists}
               selectedSong={selectedSong}
-              onSelectSong={(song) => setSelectedSongId(song.id)}
+              onSelectSong={(song) => {
+                setSelectedSongId(song.id);
+                setSelectedSongDetailRequested(true);
+              }}
               onOpenClassic={() => setView("songs")}
               onEditSong={(songId) => openV2SongEditor("edit", songId)}
               onCreateSong={() => openV2SongEditor("new")}
