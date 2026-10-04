@@ -997,7 +997,10 @@ function V2SongsView({ songs, songsLoading, chords, setlists, selectedSong, onSe
                   Escuchar
                 </a>
               ) : null}
-              {isAdmin ? <button onClick={() => onEditSong(selectedSong.id)} type="button">Editar</button> : null}
+              <button onClick={() => onEditSong(selectedSong.id)} type="button">
+                <Pencil size={17} />
+                Editar
+              </button>
             </div>
           </div>
 
@@ -5035,7 +5038,7 @@ function SessionPanel({ currentUser, onLogin, onLogout }) {
     }
   }
 
-  if (currentUser?.role === "ADMIN") {
+  if (String(currentUser?.role || "").toUpperCase() === "ADMIN") {
     return (
       <section className="session-panel is-admin">
         <span>Perfil</span>
@@ -5494,7 +5497,7 @@ function App() {
   const [error, setError] = useState("");
   const didSkipInitialSearch = useRef(false);
   const songRequestSequence = useRef(0);
-  const isAdmin = currentUser?.role === "ADMIN";
+  const isAdmin = String(currentUser?.role || "").toUpperCase() === "ADMIN";
 
   function cacheSongDetails(song) {
     const detailedSong = { ...song, __detailsLoaded: true };
@@ -5639,6 +5642,10 @@ function App() {
   }
 
   function openV2SongEditor(mode = "edit", songId = "") {
+    if (!isAdmin) {
+      setError("Inicia sesion como administrador para editar canciones.");
+      return;
+    }
     setEditorMode(mode);
     setEditorSelectedSongId(songId || selectedSong?.id || "");
     setEditorReturnView("v2-songs");
