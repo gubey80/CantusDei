@@ -653,7 +653,63 @@ function songbookCode(song) {
   return song?.songbook?.code || "sin-cancionero";
 }
 
-function V2BottomNav({ view, setView }) {
+function V2SessionMenu({ currentUser, onLogin, onLogout }) {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("admin@cantusdei.local");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const isAdminSession = String(currentUser?.role || "").toUpperCase() === "ADMIN";
+
+  async function submitLogin(event) {
+    event.preventDefault();
+    setError("");
+    try {
+      await onLogin(email, password);
+      setPassword("");
+      setOpen(false);
+    } catch (loginError) {
+      setError(loginError.message);
+    }
+  }
+
+  return (
+    <div className="v2-session-menu">
+      {open ? (
+        <section className="v2-session-popover">
+          {isAdminSession ? (
+            <>
+              <span>Sesion activa</span>
+              <strong>Administrador</strong>
+              <small>{currentUser.email}</small>
+              <button onClick={() => { onLogout(); setOpen(false); }} type="button">
+                <LogOut size={16} />
+                Cerrar sesion
+              </button>
+            </>
+          ) : (
+            <form onSubmit={submitLogin}>
+              <span>Acceso</span>
+              <strong>Iniciar sesion</strong>
+              <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" />
+              <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Contrasena" type="password" />
+              <button type="submit">
+                <LogIn size={16} />
+                Entrar
+              </button>
+              {error ? <p>{error}</p> : null}
+            </form>
+          )}
+        </section>
+      ) : null}
+      <button className={isAdminSession ? "is-active" : ""} onClick={() => setOpen((value) => !value)} type="button">
+        {isAdminSession ? <LogOut size={21} /> : <LogIn size={21} />}
+        <span>{isAdminSession ? "Admin" : "Login"}</span>
+      </button>
+    </div>
+  );
+}
+
+function V2BottomNav({ view, setView, currentUser, onLogin, onLogout }) {
   const items = [
     { id: "v2-songs", label: "Canciones", icon: Music2 },
     { id: "v2-setlists", label: "Setlist", icon: CalendarDays },
@@ -676,17 +732,18 @@ function V2BottomNav({ view, setView }) {
           </button>
         );
       })}
+      <V2SessionMenu currentUser={currentUser} onLogin={onLogin} onLogout={onLogout} />
     </nav>
   );
 }
 
-function V2Shell({ view, setView, children }) {
+function V2Shell({ view, setView, currentUser, onLogin, onLogout, children }) {
   return (
     <div className="v2-shell">
       <div className="v2-screen">
         {children}
       </div>
-      <V2BottomNav view={view} setView={setView} />
+      <V2BottomNav view={view} setView={setView} currentUser={currentUser} onLogin={onLogin} onLogout={onLogout} />
     </div>
   );
 }
@@ -1109,7 +1166,15 @@ function V2SongsView({ songs, songsLoading, chords, setlists, selectedSong, onSe
             {displayedLyrics ? (
               <LyricsView lyrics={displayedLyrics} showChords={showChords} />
             ) : (
-              <p className="empty-message">Cargando letra...</p>
+              <div className="v2-song-loading v2-lyrics-loading" role="status" aria-live="polite">
+                <div className="v2-music-loader" aria-hidden="true">
+                  <span>♪</span>
+                  <span>♫</span>
+                  <span>♬</span>
+                </div>
+                <strong>Cargando letra...</strong>
+                <p>Estamos preparando la cancion seleccionada.</p>
+              </div>
             )}
           </section>
         </article>
@@ -5683,6 +5748,7 @@ function App() {
     chords: usage.length,
     setlists: setlists.length,
   };
+  const v2SessionProps = { currentUser, onLogin: login, onLogout: logout };
   const isV2View = view.startsWith("v2-");
   const focusedViews = ["songs", "editor", "song-import", "chord-create", "chord-edit", "setlist-create", "setlist-manage"];
   const hideDashboardChrome = isV2View || focusedViews.includes(view);
@@ -5766,7 +5832,7 @@ function App() {
         ) : null}
 
         {view === "v2-songs" && (
-          <V2Shell view={view} setView={setView}>
+          <V2Shell view={view} setView={setView} {...v2SessionProps}>
             <V2SongsView
               songs={songs}
               songsLoading={songListLoading}
@@ -5788,7 +5854,7 @@ function App() {
           </V2Shell>
         )}
         {view === "v2-editor" && isAdmin && (
-          <V2Shell view="v2-songs" setView={setView}>
+          <V2Shell view="v2-songs" setView={setView} {...v2SessionProps}>
             <V2SongEditorView
               key={editorSession}
               chords={chords}
@@ -5805,7 +5871,7 @@ function App() {
           </V2Shell>
         )}
         {view === "v2-setlists" && (
-          <V2Shell view={view} setView={setView}>
+          <V2Shell view={view} setView={setView} {...v2SessionProps}>
             <V2SetlistsView
               setlists={setlists}
               chords={chords}
@@ -5816,7 +5882,7 @@ function App() {
           </V2Shell>
         )}
         {view === "v2-chords" && (
-          <V2Shell view={view} setView={setView}>
+          <V2Shell view={view} setView={setView} {...v2SessionProps}>
             <V2ChordsView
               chords={chords}
               families={chordFamilies}
