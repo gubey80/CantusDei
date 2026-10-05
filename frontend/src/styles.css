@@ -1370,6 +1370,39 @@ button:disabled {
   max-height: 620px;
 }
 
+.visual-lyrics-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.visual-lyrics-editor span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.visual-lyrics-editor textarea {
+  width: 100%;
+  min-height: 190px;
+  resize: vertical;
+  border: 1px solid #cbd9eb;
+  border-radius: 8px;
+  background: #f9fbff;
+  color: var(--ink);
+  padding: 14px;
+  font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.55;
+  letter-spacing: 0;
+}
+
+.visual-lyrics-editor textarea:focus {
+  border-color: #7aa8e8;
+  outline: 3px solid rgba(37, 99, 235, 0.12);
+}
+
 .topbar,
 .panel-heading {
   display: flex;

@@ -321,6 +321,34 @@ function insertChordAt(lyrics = "", lineIndex, textPosition, nextChord) {
   return lines.join("\n");
 }
 
+function stripChordsFromLyrics(lyrics = "") {
+  return String(lyrics || "").split("\n").map((line) => parseEditableLyricLine(line).text).join("\n");
+}
+
+function mergeVisibleLyricsWithChords(currentLyrics = "", nextVisibleLyrics = "") {
+  const currentLines = String(currentLyrics || "").split("\n");
+  const nextLines = String(nextVisibleLyrics || "").split("\n");
+
+  return nextLines.map((visibleLine, lineIndex) => {
+    const previousLine = currentLines[lineIndex] || "";
+    const { chords } = parseEditableLyricLine(previousLine);
+    if (!chords.length) return visibleLine;
+
+    let result = "";
+    let cursor = 0;
+    [...chords]
+      .sort((first, second) => first.position - second.position)
+      .forEach(({ chord, position }) => {
+        const safePosition = Math.max(0, Math.min(position, visibleLine.length));
+        result += visibleLine.slice(cursor, safePosition);
+        result += `[${chordDisplayName(normalizeChordForLookup(chord))}]`;
+        cursor = safePosition;
+      });
+    result += visibleLine.slice(cursor);
+    return result;
+  }).join("\n");
+}
+
 function textPositionFromPointer(event, text = "") {
   const element = event.currentTarget;
   const rect = element.getBoundingClientRect();
@@ -2409,6 +2437,7 @@ function V2SongEditorView({ selectedSong, chords = [], onReload, setGlobalError,
   }
 
   const previewChords = extractUniqueChords(versionForm.lyrics);
+  const visibleLyricsText = stripChordsFromLyrics(versionForm.lyrics);
 
   if (!isCreatingSong && !selectedSong) {
     return (
@@ -2637,29 +2666,18 @@ function V2SongEditorView({ selectedSong, chords = [], onReload, setGlobalError,
           </div>
         </section>
 
-        <section className="v2-edit-card v2-lyrics-editor-card">
+        <section className="v2-edit-card v2-preview-card">
           <header>
-            <span>Letra con acordes</span>
+            <div>
+              <span>Letra con acordes</span>
+              <strong>{isCreatingVersion ? "Nueva version" : versionForm.key || "Sin tono"}</strong>
+            </div>
             {!isCreatingSong && !isCreatingVersion && selectedVersion ? (
               <button className="danger-action" onClick={() => deleteVersion(selectedVersion.id)} disabled={saving} type="button">
                 <Trash2 size={16} />
                 Eliminar version
               </button>
             ) : null}
-          </header>
-          <textarea
-            className="lyrics-editor"
-            value={versionForm.lyrics}
-            onChange={(event) => updateVersionForm("lyrics", event.target.value)}
-            placeholder="[Sol]Letra de la cancion..."
-            rows="18"
-          />
-        </section>
-
-        <section className="v2-edit-card v2-preview-card">
-          <header>
-            <span>Previsualizacion</span>
-            <strong>{versionForm.key || "Sin tono"}</strong>
           </header>
           <div className="v2-diagram-scroll" aria-label="Acordes detectados">
             {previewChords.map((chord) => {
@@ -2679,6 +2697,15 @@ function V2SongEditorView({ selectedSong, chords = [], onReload, setGlobalError,
             })}
             {!previewChords.length ? <p className="empty-message">Sin acordes para previsualizar.</p> : null}
           </div>
+          <label className="visual-lyrics-editor">
+            <span>Editar letra y saltos de linea</span>
+            <textarea
+              value={visibleLyricsText}
+              onChange={(event) => updateVersionForm("lyrics", mergeVisibleLyricsWithChords(versionForm.lyrics, event.target.value))}
+              placeholder="Escribi la letra de la cancion..."
+              rows={Math.min(18, Math.max(7, visibleLyricsText.split("\n").length + 1))}
+            />
+          </label>
           <div className="v2-lyrics-card">
             <EditableLyricsPreview
               lyrics={versionForm.lyrics}
