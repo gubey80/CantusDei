@@ -282,6 +282,58 @@ function replaceChordAt(lyrics = "", lineIndex, chordIndex, nextChord) {
   return lines.join("\n");
 }
 
+function deleteChordAt(lyrics = "", lineIndex, chordIndex) {
+  const lines = String(lyrics || "").split("\n");
+  const line = lines[lineIndex] ?? "";
+  const matches = [...line.matchAll(/\[([^\]]+)\]/g)];
+  const match = matches[chordIndex];
+  if (!match) return lyrics;
+
+  lines[lineIndex] = `${line.slice(0, match.index)}${line.slice(match.index + match[0].length)}`;
+  return lines.join("\n");
+}
+
+function sourceIndexFromTextPosition(line = "", textPosition = 0) {
+  const target = Math.max(0, Number(textPosition || 0));
+  let visibleIndex = 0;
+
+  for (let sourceIndex = 0; sourceIndex < line.length; sourceIndex += 1) {
+    if (line[sourceIndex] === "[") {
+      const end = line.indexOf("]", sourceIndex + 1);
+      if (end >= 0) {
+        sourceIndex = end;
+        continue;
+      }
+    }
+    if (visibleIndex >= target) return sourceIndex;
+    visibleIndex += 1;
+  }
+
+  return line.length;
+}
+
+function insertChordAt(lyrics = "", lineIndex, textPosition, nextChord) {
+  const lines = String(lyrics || "").split("\n");
+  const line = lines[lineIndex] ?? "";
+  const sourceIndex = sourceIndexFromTextPosition(line, textPosition);
+  const cleanChord = chordDisplayName(normalizeChordForLookup(nextChord));
+  lines[lineIndex] = `${line.slice(0, sourceIndex)}[${cleanChord}]${line.slice(sourceIndex)}`;
+  return lines.join("\n");
+}
+
+function textPositionFromPointer(event, text = "") {
+  const element = event.currentTarget;
+  const rect = element.getBoundingClientRect();
+  const style = window.getComputedStyle(element);
+  const canvas = textPositionFromPointer.canvas || document.createElement("canvas");
+  textPositionFromPointer.canvas = canvas;
+  const context = canvas.getContext("2d");
+  context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  const charWidth = context.measureText("M").width || Number.parseFloat(style.fontSize) * 0.6 || 10;
+  const rawPosition = Math.round((event.clientX - rect.left) / charWidth);
+  return Math.max(0, Math.min(rawPosition, String(text || "").length));
+}
+
 function buildChordLine(text, chords) {
   const widths = chords.map(({ chord, position }) => position + chord.length);
   const width = Math.max(text.length, ...widths, 1);
@@ -559,8 +611,14 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
   }, [chords, draftChord]);
 
   function openChordEditor(lineIndex, chordIndex, chord) {
-    setActiveChord({ lineIndex, chordIndex });
+    setActiveChord({ mode: "replace", lineIndex, chordIndex });
     setDraftChord(chordDisplayName(normalizeChordForLookup(chord)));
+  }
+
+  function openAddChordEditor(event, lineIndex, text) {
+    const position = textPositionFromPointer(event, text);
+    setActiveChord({ mode: "add", lineIndex, position });
+    setDraftChord("");
   }
 
   function closeChordEditor() {
@@ -571,7 +629,16 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
   function applyChord(nextChord = draftChord) {
     const definition = findChordDefinition(chordByName, nextChord);
     if (!activeChord || !definition) return;
-    onChange(replaceChordAt(lyrics, activeChord.lineIndex, activeChord.chordIndex, definition.name));
+    const nextLyrics = activeChord.mode === "add"
+      ? insertChordAt(lyrics, activeChord.lineIndex, activeChord.position, definition.name)
+      : replaceChordAt(lyrics, activeChord.lineIndex, activeChord.chordIndex, definition.name);
+    onChange(nextLyrics);
+    closeChordEditor();
+  }
+
+  function deleteActiveChord() {
+    if (!activeChord || activeChord.mode !== "replace") return;
+    onChange(deleteChordAt(lyrics, activeChord.lineIndex, activeChord.chordIndex));
     closeChordEditor();
   }
 
@@ -587,7 +654,7 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
           <div className={`editable-lyric-line${parsed.text.trim() ? "" : " is-empty"}`} key={`line-${lineIndex}`}>
             <div className="editable-chord-layer" aria-label={`Acordes de la linea ${lineIndex + 1}`}>
               {parsed.chords.map((item, chordIndex) => {
-                const isActive = activeChord?.lineIndex === lineIndex && activeChord?.chordIndex === chordIndex;
+                const isActive = activeChord?.mode === "replace" && activeChord?.lineIndex === lineIndex && activeChord?.chordIndex === chordIndex;
                 return (
                   <button
                     key={`${item.sourceStart}-${item.chord}`}
@@ -600,8 +667,17 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
                   </button>
                 );
               })}
+              {activeChord?.mode === "add" && activeChord.lineIndex === lineIndex ? (
+                <span className="editable-chord-insert-marker" style={{ left: `${activeChord.position}ch` }}>+</span>
+              ) : null}
             </div>
-            <pre className="editable-text-row">{parsed.text || "\u00a0"}</pre>
+            <pre
+              className="editable-text-row"
+              onClick={(event) => openAddChordEditor(event, lineIndex, parsed.text)}
+              title="Click para agregar un acorde en esta posicion"
+            >
+              {parsed.text || "\u00a0"}
+            </pre>
           </div>
         );
       })}
@@ -609,7 +685,7 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
       {activeChord ? (
         <section className="chord-inline-editor" aria-label="Editar acorde">
           <header>
-            <span>Editar acorde</span>
+            <span>{activeChord.mode === "add" ? "Agregar acorde" : "Editar acorde"}</span>
             <button onClick={closeChordEditor} type="button" aria-label="Cerrar editor de acorde">
               <X size={16} />
             </button>
@@ -626,9 +702,15 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
               placeholder="Ej: Re, Fa#-, Sib"
             />
             <button disabled={!activeDefinition} onClick={() => applyChord()} type="button">
-              Aplicar
+              {activeChord.mode === "add" ? "Agregar" : "Aplicar"}
             </button>
           </div>
+          {activeChord.mode === "replace" ? (
+            <button className="chord-inline-delete" onClick={deleteActiveChord} type="button">
+              <Trash2 size={15} />
+              Eliminar este acorde
+            </button>
+          ) : null}
           {draftChord.trim() && !activeDefinition ? (
             <p className="chord-inline-error">Ese acorde no existe en la biblioteca de CantusDei.</p>
           ) : null}
