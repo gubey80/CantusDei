@@ -599,6 +599,13 @@ button:disabled {
   background: transparent;
 }
 
+.v2-setlist-loading {
+  min-height: 260px;
+  align-content: center;
+  border: 0;
+  background: transparent;
+}
+
 .v2-music-loader {
   position: relative;
   width: 88px;
@@ -1719,6 +1726,173 @@ button:disabled {
 
 .lyrics.are-chords-hidden .chord-row {
   display: none;
+}
+
+.editable-lyrics-preview {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-width: max-content;
+  padding-bottom: 92px;
+}
+
+.editable-lyric-line {
+  position: relative;
+  min-height: 50px;
+  padding-top: 22px;
+  font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+}
+
+.editable-lyric-line.is-empty {
+  min-height: 18px;
+  padding-top: 0;
+}
+
+.editable-chord-layer {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 24px;
+}
+
+.editable-chord-token {
+  position: absolute;
+  top: 0;
+  display: inline-grid;
+  min-width: 28px;
+  height: 22px;
+  align-items: center;
+  justify-items: center;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1f5bb8;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.editable-chord-token:hover,
+.editable-chord-token.is-active {
+  border-color: #8db5f0;
+  background: #e9f2ff;
+  color: #0f4fb3;
+}
+
+.editable-text-row {
+  margin: 0;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: clamp(17px, 1.35vw, 22px);
+  font-weight: 650;
+  line-height: 1.32;
+  letter-spacing: 0;
+  white-space: pre;
+}
+
+.chord-inline-editor {
+  position: sticky;
+  bottom: 12px;
+  z-index: 4;
+  display: grid;
+  gap: 10px;
+  width: min(480px, calc(100vw - 64px));
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid #c8d8ec;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 45px rgba(15, 36, 64, 0.18);
+  backdrop-filter: blur(10px);
+}
+
+.chord-inline-editor header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+}
+
+.chord-inline-editor header span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.chord-inline-editor header button,
+.chord-inline-row button,
+.chord-inline-suggestions button {
+  border: 1px solid #cbd9eb;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--secondary);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.chord-inline-editor header button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+}
+
+.chord-inline-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.chord-inline-row input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #cbd9eb;
+  border-radius: 7px;
+  padding: 10px 12px;
+  color: var(--secondary);
+  font: inherit;
+  font-weight: 850;
+}
+
+.chord-inline-row button {
+  padding: 0 14px;
+  background: var(--primary);
+  color: #fff;
+}
+
+.chord-inline-row button:disabled {
+  background: #d7e0ed;
+  color: #6e7f93;
+  cursor: not-allowed;
+}
+
+.chord-inline-error {
+  margin: 0;
+  color: #b42318;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.chord-inline-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chord-inline-suggestions button {
+  min-height: 34px;
+  padding: 0 10px;
+  background: #f7faff;
+}
+
+.chord-inline-suggestions button:hover {
+  border-color: #7aa8e8;
+  background: #eaf3ff;
 }
 
 .chords-panel {

@@ -250,6 +250,38 @@ function parseLyricLine(line = "") {
   return { text, chords };
 }
 
+function parseEditableLyricLine(line = "") {
+  const chords = [];
+  let text = "";
+  let index = 0;
+
+  for (const match of line.matchAll(/\[([^\]]+)\]/g)) {
+    text += line.slice(index, match.index);
+    chords.push({
+      chord: match[1].trim(),
+      position: text.length,
+      sourceStart: match.index,
+      sourceEnd: match.index + match[0].length,
+    });
+    index = match.index + match[0].length;
+  }
+
+  text += line.slice(index);
+  return { text, chords };
+}
+
+function replaceChordAt(lyrics = "", lineIndex, chordIndex, nextChord) {
+  const lines = String(lyrics || "").split("\n");
+  const line = lines[lineIndex] ?? "";
+  const matches = [...line.matchAll(/\[([^\]]+)\]/g)];
+  const match = matches[chordIndex];
+  if (!match) return lyrics;
+
+  const cleanChord = chordDisplayName(normalizeChordForLookup(nextChord));
+  lines[lineIndex] = `${line.slice(0, match.index)}[${cleanChord}]${line.slice(match.index + match[0].length)}`;
+  return lines.join("\n");
+}
+
 function buildChordLine(text, chords) {
   const widths = chords.map(({ chord, position }) => position + chord.length);
   const width = Math.max(text.length, ...widths, 1);
@@ -513,6 +545,106 @@ function VersionButton({ version, active, onClick }) {
   );
 }
 
+function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
+  const [activeChord, setActiveChord] = useState(null);
+  const [draftChord, setDraftChord] = useState("");
+  const chordByName = useMemo(() => chordLookupMap(chords), [chords]);
+  const activeDefinition = useMemo(() => findChordDefinition(chordByName, draftChord), [chordByName, draftChord]);
+  const chordSuggestions = useMemo(() => {
+    const query = normalizeSearchText(draftChord.trim());
+    if (!query) return chords.slice(0, 10);
+    return chords
+      .filter((chord) => chordSearchText(chord).includes(query))
+      .slice(0, 10);
+  }, [chords, draftChord]);
+
+  function openChordEditor(lineIndex, chordIndex, chord) {
+    setActiveChord({ lineIndex, chordIndex });
+    setDraftChord(chordDisplayName(normalizeChordForLookup(chord)));
+  }
+
+  function closeChordEditor() {
+    setActiveChord(null);
+    setDraftChord("");
+  }
+
+  function applyChord(nextChord = draftChord) {
+    const definition = findChordDefinition(chordByName, nextChord);
+    if (!activeChord || !definition) return;
+    onChange(replaceChordAt(lyrics, activeChord.lineIndex, activeChord.chordIndex, definition.name));
+    closeChordEditor();
+  }
+
+  return (
+    <div className="editable-lyrics-preview">
+      {String(lyrics || "").split("\n").map((line, lineIndex) => {
+        const parsed = parseEditableLyricLine(line);
+        if (isSongSectionLabel(parsed.text, parsed.chords)) {
+          return <div className="lyric-section-label" key={`line-${lineIndex}`}>{parsed.text.trim()}</div>;
+        }
+
+        return (
+          <div className={`editable-lyric-line${parsed.text.trim() ? "" : " is-empty"}`} key={`line-${lineIndex}`}>
+            <div className="editable-chord-layer" aria-label={`Acordes de la linea ${lineIndex + 1}`}>
+              {parsed.chords.map((item, chordIndex) => {
+                const isActive = activeChord?.lineIndex === lineIndex && activeChord?.chordIndex === chordIndex;
+                return (
+                  <button
+                    key={`${item.sourceStart}-${item.chord}`}
+                    className={isActive ? "editable-chord-token is-active" : "editable-chord-token"}
+                    onClick={() => openChordEditor(lineIndex, chordIndex, item.chord)}
+                    style={{ left: `${item.position}ch` }}
+                    type="button"
+                  >
+                    {chordDisplayName(normalizeChordForLookup(item.chord))}
+                  </button>
+                );
+              })}
+            </div>
+            <pre className="editable-text-row">{parsed.text || "\u00a0"}</pre>
+          </div>
+        );
+      })}
+
+      {activeChord ? (
+        <section className="chord-inline-editor" aria-label="Editar acorde">
+          <header>
+            <span>Editar acorde</span>
+            <button onClick={closeChordEditor} type="button" aria-label="Cerrar editor de acorde">
+              <X size={16} />
+            </button>
+          </header>
+          <div className="chord-inline-row">
+            <input
+              autoFocus
+              value={draftChord}
+              onChange={(event) => setDraftChord(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") applyChord();
+                if (event.key === "Escape") closeChordEditor();
+              }}
+              placeholder="Ej: Re, Fa#-, Sib"
+            />
+            <button disabled={!activeDefinition} onClick={() => applyChord()} type="button">
+              Aplicar
+            </button>
+          </div>
+          {draftChord.trim() && !activeDefinition ? (
+            <p className="chord-inline-error">Ese acorde no existe en la biblioteca de CantusDei.</p>
+          ) : null}
+          <div className="chord-inline-suggestions">
+            {chordSuggestions.map((chord) => (
+              <button key={chord.id || chord.name} onClick={() => applyChord(chord.name)} type="button">
+                {chordDisplayName(chord.name)}
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
 function ReaderView({ songs, chords, selectedSong, onSelectSong, search, setSearch, initialVersionId = "", onConfigureChord }) {
   const [selectedVersionId, setSelectedVersionId] = useState(initialVersionId || "");
   const [showLyricsChords, setShowLyricsChords] = useState(true);
@@ -679,7 +811,7 @@ function V2SessionMenu({ currentUser, onLogin, onLogout }) {
           {isAdminSession ? (
             <>
               <span>Sesion activa</span>
-              <strong>Administrador</strong>
+              <strong>Login activo</strong>
               <small>{currentUser.email}</small>
               <button onClick={() => { onLogout(); setOpen(false); }} type="button">
                 <LogOut size={16} />
@@ -702,8 +834,8 @@ function V2SessionMenu({ currentUser, onLogin, onLogout }) {
         </section>
       ) : null}
       <button className={isAdminSession ? "is-active" : ""} onClick={() => setOpen((value) => !value)} type="button">
-        {isAdminSession ? <LogOut size={21} /> : <LogIn size={21} />}
-        <span>{isAdminSession ? "Admin" : "Login"}</span>
+        <LogIn size={21} />
+        <span>Login</span>
       </button>
     </div>
   );
@@ -2466,7 +2598,11 @@ function V2SongEditorView({ selectedSong, chords = [], onReload, setGlobalError,
             {!previewChords.length ? <p className="empty-message">Sin acordes para previsualizar.</p> : null}
           </div>
           <div className="v2-lyrics-card">
-            <LyricsView lyrics={versionForm.lyrics} showChords />
+            <EditableLyricsPreview
+              lyrics={versionForm.lyrics}
+              chords={chords}
+              onChange={(nextLyrics) => updateVersionForm("lyrics", nextLyrics)}
+            />
           </div>
         </section>
       </div>
@@ -2957,6 +3093,7 @@ function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin })
   const [sessionMode, setSessionMode] = useState("");
   const [editForm, setEditForm] = useState(() => ({ ...EMPTY_SETLIST }));
   const [selectedSetlistDetails, setSelectedSetlistDetails] = useState(null);
+  const [setlistDetailLoading, setSetlistDetailLoading] = useState(false);
 
   const selectedSetlist = useMemo(() => (
     selectedSetlistDetails?.id === selectedSetlistId
@@ -3000,6 +3137,7 @@ function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin })
     setEditForm(setlistToForm(setlist));
     setMessage("");
     setScreen("detail");
+    setSetlistDetailLoading(true);
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
     try {
       const fullSetlist = await api(`/setlists/${setlist.id}`);
@@ -3008,6 +3146,8 @@ function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin })
       setEditForm(setlistToForm(fullSetlist));
     } catch (error) {
       setGlobalError(error.message);
+    } finally {
+      setSetlistDetailLoading(false);
     }
   }
 
@@ -3205,6 +3345,19 @@ function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin })
           </button>
         </header>
 
+        {setlistDetailLoading ? (
+          <article className="v2-setlist-card">
+            <div className="v2-song-loading v2-setlist-loading" role="status" aria-live="polite">
+              <div className="v2-music-loader" aria-hidden="true">
+                <span>♪</span>
+                <span>♫</span>
+                <span>♬</span>
+              </div>
+              <strong>Cargando setlist...</strong>
+              <p>Estamos preparando las canciones y los datos de la lista.</p>
+            </div>
+          </article>
+        ) : (
         <article className="v2-setlist-card">
           <header className="v2-titlebar v2-setlist-summary-header">
             <div>
@@ -3275,6 +3428,7 @@ function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin })
             </label>
           </footer>
         </article>
+        )}
       </section>
     );
   }
