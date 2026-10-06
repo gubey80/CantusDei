@@ -1803,6 +1803,7 @@ button:disabled {
 
 .editable-text-row {
   margin: 0;
+  padding-right: 24ch;
   color: var(--ink);
   font-family: inherit;
   font-size: clamp(17px, 1.35vw, 22px);

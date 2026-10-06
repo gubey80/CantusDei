@@ -329,14 +329,21 @@ function insertChordAt(lyrics = "", lineIndex, textPosition, nextChord) {
   return lines.join("\n");
 }
 
+const EDITABLE_LINE_TAIL_SPACES = 24;
+
 function lineWithChordsFromText(text = "", chords = []) {
   let result = "";
   let cursor = 0;
   [...chords]
     .sort((first, second) => first.position - second.position)
     .forEach(({ chord, position }) => {
-      const safePosition = Math.max(0, Math.min(position, text.length));
-      result += text.slice(cursor, safePosition);
+      const safePosition = Math.max(0, Number(position || 0));
+      if (safePosition > text.length) {
+        result += text.slice(cursor);
+        result += " ".repeat(Math.max(0, safePosition - Math.max(cursor, text.length)));
+      } else {
+        result += text.slice(cursor, safePosition);
+      }
       result += `[${chordDisplayName(normalizeChordForLookup(chord))}]`;
       cursor = safePosition;
     });
@@ -357,7 +364,7 @@ function moveChordToPosition(lyrics = "", lineIndex, chordIndex, nextPosition) {
   const targetChord = parsed.chords[chordIndex];
   if (!targetChord) return lyrics;
 
-  const safePosition = Math.max(0, Math.min(Number(nextPosition || 0), parsed.text.length));
+  const safePosition = Math.max(0, Math.min(Number(nextPosition || 0), parsed.text.length + EDITABLE_LINE_TAIL_SPACES));
   const nextChords = parsed.chords.map((item, index) => (
     index === chordIndex ? { ...item, position: safePosition } : item
   ));
@@ -427,7 +434,7 @@ function textPositionFromPointer(event, text = "") {
   context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
   const charWidth = context.measureText("M").width || Number.parseFloat(style.fontSize) * 0.6 || 10;
   const rawPosition = Math.round((event.clientX - rect.left) / charWidth);
-  return Math.max(0, Math.min(rawPosition, String(text || "").length));
+  return Math.max(0, Math.min(rawPosition, String(text || "").length + EDITABLE_LINE_TAIL_SPACES));
 }
 
 function buildChordLine(text, chords) {
@@ -3329,7 +3336,7 @@ function printSetlistPdf(form, orderItems, withChords) {
   return true;
 }
 
-function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin }) {
+function V2SetlistsView({ setlists, setlistsLoading, chords, onReload, setGlobalError, isAdmin }) {
   const [query, setQuery] = useState("");
   const [screen, setScreen] = useState("list");
   const [selectedSetlistId, setSelectedSetlistId] = useState("");
@@ -3698,14 +3705,24 @@ function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin })
       </label>
 
       <div className="v2-setlist-list" aria-label="Setlists guardadas">
-        {filteredSetlists.map((setlist) => (
+        {setlistsLoading && !setlists.length ? (
+          <div className="v2-song-loading" role="status" aria-live="polite">
+            <div className="v2-music-loader" aria-hidden="true">
+              <span>♪</span>
+              <span>♫</span>
+              <span>♬</span>
+            </div>
+            <strong>Cargando tus setlists...</strong>
+            <p>Estamos preparando la lista de reuniones guardadas.</p>
+          </div>
+        ) : filteredSetlists.map((setlist) => (
           <button key={setlist.id} onClick={() => openSetlist(setlist)} type="button">
             <strong>{setlist.name}</strong>
             <span>{setlistDate(setlist.date)} - {setlist.items?.length || 0} canciones</span>
             {setlist.leader ? <small>{setlist.leader}</small> : null}
           </button>
         ))}
-        {!filteredSetlists.length ? <p className="empty-song-list">No hay setlists con esa busqueda.</p> : null}
+        {!setlistsLoading && !filteredSetlists.length ? <p className="empty-song-list">No hay setlists con esa busqueda.</p> : null}
       </div>
     </section>
   );
@@ -5947,6 +5964,7 @@ function App() {
   const [chordFamilies, setChordFamilies] = useState([]);
   const [usage, setUsage] = useState([]);
   const [setlists, setSetlists] = useState([]);
+  const [setlistsLoading, setSetlistsLoading] = useState(true);
   const [tutorials, setTutorials] = useState([]);
   const [users, setUsers] = useState([]);
   const [songDetailsById, setSongDetailsById] = useState({});
@@ -6006,6 +6024,7 @@ function App() {
     };
     try {
       setError("");
+      setSetlistsLoading(true);
       const initialResults = await Promise.allSettled([
         api(songListUrl(search)).then((songData) => {
           if (requestId === songRequestSequence.current) {
@@ -6020,7 +6039,16 @@ function App() {
         api("/chords").then(applyIfCurrent(setChords)),
         api("/chords/families").then(applyIfCurrent(setChordFamilies)),
         api("/chords/usage").then(applyIfCurrent(setUsage)),
-        api("/setlists?summary=1").then(applyIfCurrent(setSetlists)),
+        api("/setlists?summary=1").then((setlistData) => {
+          if (requestId === songRequestSequence.current) {
+            setSetlists(setlistData);
+            setSetlistsLoading(false);
+          }
+          return setlistData;
+        }).catch((loadError) => {
+          if (requestId === songRequestSequence.current) setSetlistsLoading(false);
+          throw loadError;
+        }),
         api("/tutorials").then(applyIfCurrent(setTutorials)),
         api("/users").then(applyIfCurrent(setUsers)),
       ]);
@@ -6274,6 +6302,7 @@ function App() {
           <V2Shell view={view} setView={setView} {...v2SessionProps}>
             <V2SetlistsView
               setlists={setlists}
+              setlistsLoading={setlistsLoading}
               chords={chords}
               onReload={loadData}
               setGlobalError={setError}
