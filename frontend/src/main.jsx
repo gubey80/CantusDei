@@ -391,6 +391,21 @@ function splitVisibleLineAt(lyrics = "", lineIndex, position = 0) {
   return lines.join("\n");
 }
 
+function mergeLineWithPrevious(lyrics = "", lineIndex) {
+  if (lineIndex <= 0) return lyrics;
+  const lines = String(lyrics || "").split("\n");
+  const previous = parseEditableLyricLine(lines[lineIndex - 1] || "");
+  const current = parseEditableLyricLine(lines[lineIndex] || "");
+  const joinedText = `${previous.text}${current.text}`;
+  const joinedChords = [
+    ...previous.chords,
+    ...current.chords.map((item) => ({ ...item, position: previous.text.length + item.position })),
+  ];
+
+  lines.splice(lineIndex - 1, 2, lineWithChordsFromText(joinedText, joinedChords));
+  return lines.join("\n");
+}
+
 function caretOffsetInElement(element) {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) return String(element.textContent || "").length;
@@ -681,6 +696,7 @@ function VersionButton({ version, active, onClick }) {
 function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
   const [activeChord, setActiveChord] = useState(null);
   const [draftChord, setDraftChord] = useState("");
+  const [focusChord, setFocusChord] = useState(null);
   const chordByName = useMemo(() => chordLookupMap(chords), [chords]);
   const normalizedDraftChord = useMemo(() => normalizeChordForLookup(draftChord), [draftChord]);
   const validDraftChord = useMemo(() => isValidChordName(draftChord), [draftChord]);
@@ -693,9 +709,18 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
       .slice(0, 10);
   }, [chords, draftChord]);
 
+  useEffect(() => {
+    if (!focusChord) return;
+    window.requestAnimationFrame(() => {
+      const button = document.querySelector(`[data-chord-token="${focusChord.lineIndex}-${focusChord.chordIndex}"]`);
+      if (button) button.focus();
+    });
+  }, [focusChord]);
+
   function openChordEditor(lineIndex, chordIndex, chord) {
     setActiveChord({ mode: "replace", lineIndex, chordIndex });
     setDraftChord(chordDisplayName(normalizeChordForLookup(chord)));
+    setFocusChord({ lineIndex, chordIndex, stamp: Date.now() });
   }
 
   function openAddChordEditor(event, lineIndex, text) {
@@ -731,15 +756,22 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
   }
 
   function handleTextKeyDown(event, lineIndex) {
-    if (event.key !== "Enter") return;
-    event.preventDefault();
     const position = caretOffsetInElement(event.currentTarget);
-    onChange(splitVisibleLineAt(lyrics, lineIndex, position));
+    if (event.key === "Enter") {
+      event.preventDefault();
+      onChange(splitVisibleLineAt(lyrics, lineIndex, position));
+      return;
+    }
+    if (event.key === "Backspace" && position === 0 && lineIndex > 0) {
+      event.preventDefault();
+      onChange(mergeLineWithPrevious(lyrics, lineIndex));
+    }
   }
 
   function moveChord(lineIndex, chordIndex, position) {
     onChange(moveChordToPosition(lyrics, lineIndex, chordIndex, position));
     setActiveChord({ mode: "replace", lineIndex, chordIndex });
+    setFocusChord({ lineIndex, chordIndex, stamp: Date.now() });
   }
 
   function handleChordKeyDown(event, lineIndex, chordIndex, position) {
@@ -768,6 +800,54 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
     }
   }
 
+  function chordEditorPanel() {
+    if (!activeChord) return null;
+    return (
+      <section className="chord-inline-editor" aria-label="Editar acorde">
+        <header>
+          <span>{activeChord.mode === "add" ? "Agregar acorde" : "Editar acorde"}</span>
+          <button onClick={closeChordEditor} type="button" aria-label="Cerrar editor de acorde">
+            <X size={16} />
+          </button>
+        </header>
+        <div className="chord-inline-row">
+          <input
+            autoFocus={activeChord.mode === "add"}
+            value={draftChord}
+            onChange={(event) => setDraftChord(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") applyChord();
+              if (event.key === "Escape") closeChordEditor();
+            }}
+            placeholder="Ej: Re, Fa#-, Sib"
+          />
+          <button disabled={!validDraftChord} onClick={() => applyChord()} type="button">
+            {activeChord.mode === "add" ? "Agregar" : "Aplicar"}
+          </button>
+        </div>
+        {activeChord.mode === "replace" ? (
+          <button className="chord-inline-delete" onClick={deleteActiveChord} type="button">
+            <Trash2 size={15} />
+            Eliminar este acorde
+          </button>
+        ) : null}
+        {draftChord.trim() && !validDraftChord ? (
+          <p className="chord-inline-error">Ese nombre no parece un acorde valido.</p>
+        ) : null}
+        {draftChord.trim() && validDraftChord && !activeDefinition ? (
+          <p className="chord-inline-hint">{chordDisplayName(normalizedDraftChord)} se puede usar, pero aun no tiene diagrama configurado.</p>
+        ) : null}
+        <div className="chord-inline-suggestions">
+          {chordSuggestions.map((chord) => (
+            <button key={chord.id || chord.name} onClick={() => applyChord(chord.name)} type="button">
+              {chordDisplayName(chord.name)}
+            </button>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <div className="editable-lyrics-preview">
       {String(lyrics || "").split("\n").map((line, lineIndex) => {
@@ -785,6 +865,7 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
                   <button
                     key={`${item.sourceStart}-${item.chord}`}
                     className={isActive ? "editable-chord-token is-active" : "editable-chord-token"}
+                    data-chord-token={`${lineIndex}-${chordIndex}`}
                     draggable
                     onClick={() => openChordEditor(lineIndex, chordIndex, item.chord)}
                     onDragStart={(event) => handleChordDragStart(event, { lineIndex, chordIndex })}
@@ -814,54 +895,10 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
             >
               {parsed.text || "\u00a0"}
             </pre>
+            {activeChord?.lineIndex === lineIndex ? chordEditorPanel() : null}
           </div>
         );
       })}
-
-      {activeChord ? (
-        <section className="chord-inline-editor" aria-label="Editar acorde">
-          <header>
-            <span>{activeChord.mode === "add" ? "Agregar acorde" : "Editar acorde"}</span>
-            <button onClick={closeChordEditor} type="button" aria-label="Cerrar editor de acorde">
-              <X size={16} />
-            </button>
-          </header>
-          <div className="chord-inline-row">
-            <input
-              autoFocus
-              value={draftChord}
-              onChange={(event) => setDraftChord(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") applyChord();
-                if (event.key === "Escape") closeChordEditor();
-              }}
-              placeholder="Ej: Re, Fa#-, Sib"
-            />
-            <button disabled={!validDraftChord} onClick={() => applyChord()} type="button">
-              {activeChord.mode === "add" ? "Agregar" : "Aplicar"}
-            </button>
-          </div>
-          {activeChord.mode === "replace" ? (
-            <button className="chord-inline-delete" onClick={deleteActiveChord} type="button">
-              <Trash2 size={15} />
-              Eliminar este acorde
-            </button>
-          ) : null}
-          {draftChord.trim() && !validDraftChord ? (
-            <p className="chord-inline-error">Ese nombre no parece un acorde valido.</p>
-          ) : null}
-          {draftChord.trim() && validDraftChord && !activeDefinition ? (
-            <p className="chord-inline-hint">{chordDisplayName(normalizedDraftChord)} se puede usar, pero aun no tiene diagrama configurado.</p>
-          ) : null}
-          <div className="chord-inline-suggestions">
-            {chordSuggestions.map((chord) => (
-              <button key={chord.id || chord.name} onClick={() => applyChord(chord.name)} type="button">
-                {chordDisplayName(chord.name)}
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }

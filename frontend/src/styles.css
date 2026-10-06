@@ -1822,13 +1822,12 @@ button:disabled {
 }
 
 .chord-inline-editor {
-  position: sticky;
-  bottom: 12px;
+  position: relative;
   z-index: 4;
   display: grid;
   gap: 10px;
   width: min(480px, calc(100vw - 64px));
-  margin-top: 8px;
+  margin-top: 10px;
   padding: 12px;
   border: 1px solid #c8d8ec;
   border-radius: 8px;
