@@ -321,32 +321,63 @@ function insertChordAt(lyrics = "", lineIndex, textPosition, nextChord) {
   return lines.join("\n");
 }
 
-function stripChordsFromLyrics(lyrics = "") {
-  return String(lyrics || "").split("\n").map((line) => parseEditableLyricLine(line).text).join("\n");
+function lineWithChordsFromText(text = "", chords = []) {
+  let result = "";
+  let cursor = 0;
+  [...chords]
+    .sort((first, second) => first.position - second.position)
+    .forEach(({ chord, position }) => {
+      const safePosition = Math.max(0, Math.min(position, text.length));
+      result += text.slice(cursor, safePosition);
+      result += `[${chordDisplayName(normalizeChordForLookup(chord))}]`;
+      cursor = safePosition;
+    });
+  result += text.slice(cursor);
+  return result;
 }
 
-function mergeVisibleLyricsWithChords(currentLyrics = "", nextVisibleLyrics = "") {
-  const currentLines = String(currentLyrics || "").split("\n");
-  const nextLines = String(nextVisibleLyrics || "").split("\n");
+function replaceVisibleLineAt(lyrics = "", lineIndex, nextText = "") {
+  const lines = String(lyrics || "").split("\n");
+  const parsed = parseEditableLyricLine(lines[lineIndex] || "");
+  lines[lineIndex] = lineWithChordsFromText(nextText, parsed.chords);
+  return lines.join("\n");
+}
 
-  return nextLines.map((visibleLine, lineIndex) => {
-    const previousLine = currentLines[lineIndex] || "";
-    const { chords } = parseEditableLyricLine(previousLine);
-    if (!chords.length) return visibleLine;
+function splitVisibleLineAt(lyrics = "", lineIndex, position = 0) {
+  const lines = String(lyrics || "").split("\n");
+  const parsed = parseEditableLyricLine(lines[lineIndex] || "");
+  const safePosition = Math.max(0, Math.min(Number(position || 0), parsed.text.length));
+  const beforeText = parsed.text.slice(0, safePosition);
+  const afterText = parsed.text.slice(safePosition);
+  const beforeChords = [];
+  const afterChords = [];
 
-    let result = "";
-    let cursor = 0;
-    [...chords]
-      .sort((first, second) => first.position - second.position)
-      .forEach(({ chord, position }) => {
-        const safePosition = Math.max(0, Math.min(position, visibleLine.length));
-        result += visibleLine.slice(cursor, safePosition);
-        result += `[${chordDisplayName(normalizeChordForLookup(chord))}]`;
-        cursor = safePosition;
-      });
-    result += visibleLine.slice(cursor);
-    return result;
-  }).join("\n");
+  parsed.chords.forEach((item) => {
+    if (item.position <= safePosition) {
+      beforeChords.push({ ...item, position: Math.min(item.position, beforeText.length) });
+    } else {
+      afterChords.push({ ...item, position: Math.max(0, item.position - safePosition) });
+    }
+  });
+
+  lines.splice(
+    lineIndex,
+    1,
+    lineWithChordsFromText(beforeText, beforeChords),
+    lineWithChordsFromText(afterText, afterChords),
+  );
+  return lines.join("\n");
+}
+
+function caretOffsetInElement(element) {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return String(element.textContent || "").length;
+  const range = selection.getRangeAt(0);
+  if (!element.contains(range.startContainer)) return String(element.textContent || "").length;
+  const clone = range.cloneRange();
+  clone.selectNodeContents(element);
+  clone.setEnd(range.startContainer, range.startOffset);
+  return clone.toString().length;
 }
 
 function textPositionFromPointer(event, text = "") {
@@ -670,6 +701,17 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
     closeChordEditor();
   }
 
+  function updateVisibleLine(lineIndex, nextText) {
+    onChange(replaceVisibleLineAt(lyrics, lineIndex, nextText));
+  }
+
+  function handleTextKeyDown(event, lineIndex) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    const position = caretOffsetInElement(event.currentTarget);
+    onChange(splitVisibleLineAt(lyrics, lineIndex, position));
+  }
+
   return (
     <div className="editable-lyrics-preview">
       {String(lyrics || "").split("\n").map((line, lineIndex) => {
@@ -701,8 +743,12 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
             </div>
             <pre
               className="editable-text-row"
-              onClick={(event) => openAddChordEditor(event, lineIndex, parsed.text)}
-              title="Click para agregar un acorde en esta posicion"
+              contentEditable
+              suppressContentEditableWarning
+              onBlur={(event) => updateVisibleLine(lineIndex, event.currentTarget.textContent || "")}
+              onDoubleClick={(event) => openAddChordEditor(event, lineIndex, event.currentTarget.textContent || parsed.text)}
+              onKeyDown={(event) => handleTextKeyDown(event, lineIndex)}
+              title="Escribi directamente. Doble click para agregar un acorde."
             >
               {parsed.text || "\u00a0"}
             </pre>
@@ -2437,8 +2483,6 @@ function V2SongEditorView({ selectedSong, chords = [], onReload, setGlobalError,
   }
 
   const previewChords = extractUniqueChords(versionForm.lyrics);
-  const visibleLyricsText = stripChordsFromLyrics(versionForm.lyrics);
-
   if (!isCreatingSong && !selectedSong) {
     return (
       <section className="v2-editor-page">
@@ -2697,15 +2741,6 @@ function V2SongEditorView({ selectedSong, chords = [], onReload, setGlobalError,
             })}
             {!previewChords.length ? <p className="empty-message">Sin acordes para previsualizar.</p> : null}
           </div>
-          <label className="visual-lyrics-editor">
-            <span>Editar letra y saltos de linea</span>
-            <textarea
-              value={visibleLyricsText}
-              onChange={(event) => updateVersionForm("lyrics", mergeVisibleLyricsWithChords(versionForm.lyrics, event.target.value))}
-              placeholder="Escribi la letra de la cancion..."
-              rows={Math.min(18, Math.max(7, visibleLyricsText.split("\n").length + 1))}
-            />
-          </label>
           <div className="v2-lyrics-card">
             <EditableLyricsPreview
               lyrics={versionForm.lyrics}
