@@ -990,9 +990,9 @@ button:disabled {
 
 .v2-setlist-summary-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 8px;
-  min-width: min(100%, 360px);
+  width: min(100%, 520px);
 }
 
 .v2-setlist-summary-grid div {
@@ -1012,11 +1012,9 @@ button:disabled {
 }
 
 .v2-setlist-summary-grid strong {
-  overflow: hidden;
   color: var(--secondary);
   font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .v2-setlist-comment {
@@ -1771,7 +1769,12 @@ button:disabled {
   font-size: 18px;
   font-weight: 900;
   line-height: 1;
-  cursor: pointer;
+  cursor: grab;
+  user-select: none;
+}
+
+.editable-chord-token:active {
+  cursor: grabbing;
 }
 
 .editable-chord-token:hover,
@@ -1919,6 +1922,13 @@ button:disabled {
 .chord-inline-error {
   margin: 0;
   color: #b42318;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.chord-inline-hint {
+  margin: 0;
+  color: #47617d;
   font-size: 13px;
   font-weight: 800;
 }

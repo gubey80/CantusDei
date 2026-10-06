@@ -162,6 +162,14 @@ function normalizeChordForLookup(chord = "") {
   return normalized.join("/");
 }
 
+function isValidChordName(chord = "") {
+  const normalized = normalizeChordForLookup(chord);
+  if (!String(chord || "").trim() || !normalized.trim()) return false;
+  return normalized.split("/").every((part) => (
+    /^([A-G])([#b]?)(m|maj7|m7|7|sus2|sus4|sus|add2|add9|dim|aug|6|9|11|13)?$/i.test(part.trim())
+  ));
+}
+
 function chordDisplayName(chord = "") {
   const parts = String(chord || "").trim().split("/");
   return parts.map((part) => {
@@ -340,6 +348,20 @@ function replaceVisibleLineAt(lyrics = "", lineIndex, nextText = "") {
   const lines = String(lyrics || "").split("\n");
   const parsed = parseEditableLyricLine(lines[lineIndex] || "");
   lines[lineIndex] = lineWithChordsFromText(nextText, parsed.chords);
+  return lines.join("\n");
+}
+
+function moveChordToPosition(lyrics = "", lineIndex, chordIndex, nextPosition) {
+  const lines = String(lyrics || "").split("\n");
+  const parsed = parseEditableLyricLine(lines[lineIndex] || "");
+  const targetChord = parsed.chords[chordIndex];
+  if (!targetChord) return lyrics;
+
+  const safePosition = Math.max(0, Math.min(Number(nextPosition || 0), parsed.text.length));
+  const nextChords = parsed.chords.map((item, index) => (
+    index === chordIndex ? { ...item, position: safePosition } : item
+  ));
+  lines[lineIndex] = lineWithChordsFromText(parsed.text, nextChords);
   return lines.join("\n");
 }
 
@@ -660,6 +682,8 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
   const [activeChord, setActiveChord] = useState(null);
   const [draftChord, setDraftChord] = useState("");
   const chordByName = useMemo(() => chordLookupMap(chords), [chords]);
+  const normalizedDraftChord = useMemo(() => normalizeChordForLookup(draftChord), [draftChord]);
+  const validDraftChord = useMemo(() => isValidChordName(draftChord), [draftChord]);
   const activeDefinition = useMemo(() => findChordDefinition(chordByName, draftChord), [chordByName, draftChord]);
   const chordSuggestions = useMemo(() => {
     const query = normalizeSearchText(draftChord.trim());
@@ -687,10 +711,11 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
 
   function applyChord(nextChord = draftChord) {
     const definition = findChordDefinition(chordByName, nextChord);
-    if (!activeChord || !definition) return;
+    if (!activeChord || !isValidChordName(nextChord)) return;
+    const chordName = definition?.name || normalizeChordForLookup(nextChord);
     const nextLyrics = activeChord.mode === "add"
-      ? insertChordAt(lyrics, activeChord.lineIndex, activeChord.position, definition.name)
-      : replaceChordAt(lyrics, activeChord.lineIndex, activeChord.chordIndex, definition.name);
+      ? insertChordAt(lyrics, activeChord.lineIndex, activeChord.position, chordName)
+      : replaceChordAt(lyrics, activeChord.lineIndex, activeChord.chordIndex, chordName);
     onChange(nextLyrics);
     closeChordEditor();
   }
@@ -712,6 +737,37 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
     onChange(splitVisibleLineAt(lyrics, lineIndex, position));
   }
 
+  function moveChord(lineIndex, chordIndex, position) {
+    onChange(moveChordToPosition(lyrics, lineIndex, chordIndex, position));
+    setActiveChord({ mode: "replace", lineIndex, chordIndex });
+  }
+
+  function handleChordKeyDown(event, lineIndex, chordIndex, position) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const delta = (event.key === "ArrowLeft" ? -1 : 1) * (event.shiftKey ? 4 : 1);
+    moveChord(lineIndex, chordIndex, position + delta);
+  }
+
+  function handleChordDragStart(event, chord) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("application/json", JSON.stringify(chord));
+  }
+
+  function handleChordDrop(event, lineIndex, text) {
+    event.preventDefault();
+    const payload = event.dataTransfer.getData("application/json");
+    if (!payload) return;
+    try {
+      const chord = JSON.parse(payload);
+      if (Number(chord.lineIndex) !== lineIndex) return;
+      const position = textPositionFromPointer(event, text);
+      moveChord(lineIndex, Number(chord.chordIndex), position);
+    } catch {
+      // Ignore drops that did not originate from a chord token.
+    }
+  }
+
   return (
     <div className="editable-lyrics-preview">
       {String(lyrics || "").split("\n").map((line, lineIndex) => {
@@ -729,8 +785,12 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
                   <button
                     key={`${item.sourceStart}-${item.chord}`}
                     className={isActive ? "editable-chord-token is-active" : "editable-chord-token"}
+                    draggable
                     onClick={() => openChordEditor(lineIndex, chordIndex, item.chord)}
+                    onDragStart={(event) => handleChordDragStart(event, { lineIndex, chordIndex })}
+                    onKeyDown={(event) => handleChordKeyDown(event, lineIndex, chordIndex, item.position)}
                     style={{ left: `${item.position}ch` }}
+                    title="Click para editar. Flechas para mover. Arrastra para ubicar."
                     type="button"
                   >
                     {chordDisplayName(normalizeChordForLookup(item.chord))}
@@ -746,6 +806,8 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
               contentEditable
               suppressContentEditableWarning
               onBlur={(event) => updateVisibleLine(lineIndex, event.currentTarget.textContent || "")}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => handleChordDrop(event, lineIndex, event.currentTarget.textContent || parsed.text)}
               onDoubleClick={(event) => openAddChordEditor(event, lineIndex, event.currentTarget.textContent || parsed.text)}
               onKeyDown={(event) => handleTextKeyDown(event, lineIndex)}
               title="Escribi directamente. Doble click para agregar un acorde."
@@ -775,7 +837,7 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
               }}
               placeholder="Ej: Re, Fa#-, Sib"
             />
-            <button disabled={!activeDefinition} onClick={() => applyChord()} type="button">
+            <button disabled={!validDraftChord} onClick={() => applyChord()} type="button">
               {activeChord.mode === "add" ? "Agregar" : "Aplicar"}
             </button>
           </div>
@@ -785,8 +847,11 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
               Eliminar este acorde
             </button>
           ) : null}
-          {draftChord.trim() && !activeDefinition ? (
-            <p className="chord-inline-error">Ese acorde no existe en la biblioteca de CantusDei.</p>
+          {draftChord.trim() && !validDraftChord ? (
+            <p className="chord-inline-error">Ese nombre no parece un acorde valido.</p>
+          ) : null}
+          {draftChord.trim() && validDraftChord && !activeDefinition ? (
+            <p className="chord-inline-hint">{chordDisplayName(normalizedDraftChord)} se puede usar, pero aun no tiene diagrama configurado.</p>
           ) : null}
           <div className="chord-inline-suggestions">
             {chordSuggestions.map((chord) => (
@@ -3510,7 +3575,7 @@ function V2SetlistsView({ setlists, chords, onReload, setGlobalError, isAdmin })
               <p>{orderItems.length} cancion(es)</p>
             </div>
             <div className="v2-setlist-summary-grid">
-              {visibleMusicians.slice(0, 4).map(([role, value]) => (
+              {visibleMusicians.map(([role, value]) => (
                 <div key={role}>
                   <span>{role}</span>
                   <strong>{value}</strong>
