@@ -2500,6 +2500,8 @@ function V2SongEditorView({ selectedSong, chords = [], onReload, setGlobalError,
   const [capoMode, setCapoMode] = useState("keepShapes");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [smartPasteText, setSmartPasteText] = useState("");
+  const [smartPasteSummary, setSmartPasteSummary] = useState("");
 
   const selectedVersion = useMemo(() => {
     return selectedSong?.versions?.find((version) => version.id === selectedVersionId) || selectedSong?.versions?.[0] || null;
@@ -2550,6 +2552,28 @@ function V2SongEditorView({ selectedSong, chords = [], onReload, setGlobalError,
 
   function updateVersionForm(field, value) {
     setVersionForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function applySmartPaste() {
+    const parsed = parsePastedSongText(smartPasteText);
+    if (!parsed.lyrics) {
+      setGlobalError("Pegá una canción con letra para poder procesarla.");
+      return;
+    }
+
+    setSongForm((current) => ({
+      ...current,
+      title: current.title || parsed.title,
+      artist: current.artist || parsed.artist,
+    }));
+    setVersionForm((current) => ({
+      ...current,
+      key: parsed.key || current.key || "C",
+      name: current.name || `Tono ${parsed.key || current.key || "C"}`,
+      lyrics: parsed.lyrics,
+    }));
+    setSmartPasteSummary(`Procesado: ${parsed.lineCount} linea(s), ${extractUniqueChords(parsed.lyrics).length} acorde(s) detectado(s).`);
+    setMessage("Cancion pegada y convertida al formato CantusDei.");
   }
 
   function startNewVersion() {
