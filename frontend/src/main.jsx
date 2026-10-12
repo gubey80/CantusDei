@@ -1245,7 +1245,7 @@ function V2Placeholder({ title, description, actionLabel, onAction }) {
   );
 }
 
-function V2SongsView({ songs, songsLoading, chords, setlists, selectedSong, onSelectSong, onOpenClassic, onEditSong, onStructureSong, onCreateSong, onImportSongs, onReload, setGlobalError, isAdmin }) {
+function V2SongsView({ songs, songsLoading, chords, setlists, selectedSong, onSelectSong, onOpenClassic, onEditSong, onStructureSong, onCreateSong, onCreateStructuredSong, onImportSongs, onReload, setGlobalError, isAdmin }) {
   const [screen, setScreen] = useState("list");
   const [nameFilter, setNameFilter] = useState("");
   const [songbookFilter, setSongbookFilter] = useState("all");
@@ -1682,6 +1682,7 @@ function V2SongsView({ songs, songsLoading, chords, setlists, selectedSong, onSe
         </div>
         <div className="v2-hero-actions">
           {isAdmin ? <button className="v2-primary-button" onClick={onCreateSong} type="button"><Plus size={17} /> Nueva cancion</button> : null}
+          {isAdmin ? <button className="v2-ghost-button" onClick={onCreateStructuredSong} type="button"><ListPlus size={17} /> Nueva estructurada</button> : null}
           {isAdmin ? <button className="v2-ghost-button" onClick={onImportSongs} type="button"><FileText size={17} /> Importar</button> : null}
           <button className="v2-ghost-button" onClick={onOpenClassic} type="button">Vista clasica</button>
         </div>
@@ -3159,32 +3160,55 @@ function V2SongEditorView({ selectedSong, chords = [], onReload, setGlobalError,
   );
 }
 
-function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlobalError, onReturn }) {
+function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlobalError, onReturn, initialMode = "edit" }) {
+  const isCreatingSong = initialMode === "new";
   const [selectedVersionId, setSelectedVersionId] = useState("");
+  const [songForm, setSongForm] = useState(EMPTY_SONG);
+  const [versionForm, setVersionForm] = useState(EMPTY_VERSION);
   const [sections, setSections] = useState(() => [createBaseSection("verse", 1)]);
   const [selectedSectionId, setSelectedSectionId] = useState("");
+  const [sectionPasteText, setSectionPasteText] = useState("");
+  const [sectionPasteSummary, setSectionPasteSummary] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
   const selectedVersion = useMemo(() => {
+    if (isCreatingSong) return null;
     return selectedSong?.versions?.find((version) => version.id === selectedVersionId) || selectedSong?.versions?.[0] || null;
-  }, [selectedSong, selectedVersionId]);
+  }, [isCreatingSong, selectedSong, selectedVersionId]);
 
   const selectedSection = sections.find((section) => section.id === selectedSectionId) || sections[0] || null;
 
   useEffect(() => {
+    if (isCreatingSong) return;
     if (!selectedSong?.versions?.some((version) => version.id === selectedVersionId)) {
       setSelectedVersionId(selectedSong?.versions?.[0]?.id || "");
     }
-  }, [selectedSong, selectedVersionId]);
+  }, [isCreatingSong, selectedSong, selectedVersionId]);
 
   useEffect(() => {
+    if (isCreatingSong) return;
     if (!selectedVersion) return;
     const parsedSections = parseBaseSectionsFromLyrics(selectedVersion.lyrics || "");
     setSections(parsedSections);
     setSelectedSectionId(parsedSections[0]?.id || "");
     setMessage("");
-  }, [selectedVersion?.id]);
+  }, [isCreatingSong, selectedVersion?.id]);
+
+  useEffect(() => {
+    if (!isCreatingSong) return;
+    const initial = [createBaseSection("verse", 1)];
+    setSections(initial);
+    setSelectedSectionId(initial[0].id);
+  }, [isCreatingSong]);
+
+  function updateSongForm(field, value) {
+    setSongForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateVersionForm(field, value) {
+    setVersionForm((current) => ({ ...current, [field]: value }));
+  }
 
   function updateSection(sectionId, field, value) {
     setSections((current) => current.map((section) => (
@@ -3234,22 +3258,57 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
     });
   }
 
+  function applySectionPaste() {
+    if (!selectedSection) return;
+    const parsed = parsePastedSongText(sectionPasteText);
+    const nextLyrics = parsed.lyrics || sectionPasteText.trim();
+    if (!nextLyrics) {
+      setGlobalError("Pega una porcion de cancion para agregarla a la seccion.");
+      return;
+    }
+    updateSection(selectedSection.id, "lyrics", nextLyrics);
+    if (parsed.key) updateVersionForm("key", parsed.key);
+    setSectionPasteSummary(`Seccion actualizada: ${nextLyrics.split("\n").filter((line) => line.trim()).length} linea(s), ${extractUniqueChords(nextLyrics).length} acorde(s).`);
+    setMessage("Porcion pegada en la seccion seleccionada.");
+  }
+
   async function saveStructure() {
-    if (!selectedVersion) return;
     const validSections = sections.filter((section) => section.name.trim() || section.lyrics.trim());
     if (!validSections.length) {
       setGlobalError("Agrega al menos una seccion con nombre o letra.");
+      return;
+    }
+    if (isCreatingSong && !songForm.title.trim()) {
+      setGlobalError("El titulo de la cancion es obligatorio.");
       return;
     }
     setSaving(true);
     setMessage("");
     setGlobalError("");
     try {
+      const lyrics = serializeBaseSectionsToLyrics(validSections);
+      if (isCreatingSong) {
+        const saved = await api("/songs", {
+          method: "POST",
+          body: JSON.stringify({
+            ...songPayload(songForm),
+            version: versionPayload({
+              ...versionForm,
+              lyrics,
+            }),
+          }),
+        });
+        setMessage("Cancion estructurada creada.");
+        await onReload(saved.id);
+        return;
+      }
+
+      if (!selectedVersion) return;
       await api(`/songs/versions/${selectedVersion.id}`, {
         method: "PUT",
         body: JSON.stringify(versionPayload({
           ...versionToForm(selectedVersion),
-          lyrics: serializeBaseSectionsToLyrics(validSections),
+          lyrics,
         })),
       });
       setMessage("Estructura base guardada.");
@@ -3261,7 +3320,7 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
     }
   }
 
-  if (!selectedSong) {
+  if (!isCreatingSong && !selectedSong) {
     return (
       <section className="v2-editor-page">
         <button className="v2-back-button" onClick={onReturn} type="button">
@@ -3282,26 +3341,60 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
       <header className="v2-editor-hero">
         <button className="v2-back-button" onClick={onReturn} type="button">
           <ChevronLeft size={18} />
-          Volver a la cancion
+          {isCreatingSong ? "Volver a canciones" : "Volver a la cancion"}
         </button>
         <div>
-          <span>Estructura base</span>
-          <h2>{selectedSong.title}</h2>
-          <p>Ordena la canción en Intro, Verso, Pre-coro, Coro, Puente, Solo, Instrumental, Final u Otro.</p>
+          <span>{isCreatingSong ? "Nueva cancion estructurada" : "Estructura base"}</span>
+          <h2>{isCreatingSong ? songForm.title || "Nueva cancion" : selectedSong.title}</h2>
+          <p>{isCreatingSong ? "Crea una canción nueva pegando porciones en secciones." : "Ordena la canción en Intro, Verso, Pre-coro, Coro, Puente, Solo, Instrumental, Final u Otro."}</p>
         </div>
         <div className="v2-editor-main-actions">
           <button className="v2-ghost-button" onClick={() => addSection("verse")} type="button">
             <Plus size={17} />
             Nueva seccion
           </button>
-          <button className="v2-primary-button" onClick={saveStructure} disabled={saving || !selectedVersion} type="button">
+          <button className="v2-primary-button" onClick={saveStructure} disabled={saving || (!isCreatingSong && !selectedVersion)} type="button">
             <Save size={17} />
-            {saving ? "Guardando..." : "Guardar base"}
+            {saving ? "Guardando..." : isCreatingSong ? "Crear cancion" : "Guardar base"}
           </button>
         </div>
       </header>
 
       {message ? <p className="success-box">{message}</p> : null}
+
+      {isCreatingSong ? (
+        <section className="v2-structure-editor-card">
+          <header>
+            <div>
+              <span>Datos generales</span>
+              <strong>Informacion de la nueva cancion</strong>
+            </div>
+          </header>
+          <div className="form-grid">
+            <Field label="Cancionero">
+              <select value={songForm.songbookCode} onChange={(event) => updateSongForm("songbookCode", event.target.value)}>
+                <option value="mayor">Cancionero Mayor</option>
+                <option value="escuela-biblica">Escuela Biblica</option>
+              </select>
+            </Field>
+            <Field label="Titulo">
+              <input value={songForm.title} onChange={(event) => updateSongForm("title", event.target.value)} />
+            </Field>
+            <Field label="Artista / autor">
+              <input value={songForm.artist} onChange={(event) => updateSongForm("artist", event.target.value)} />
+            </Field>
+            <Field label="Link para escuchar">
+              <input value={songForm.listenUrl} onChange={(event) => updateSongForm("listenUrl", event.target.value)} placeholder="https://..." />
+            </Field>
+            <Field label="Nombre de version">
+              <input value={versionForm.name} onChange={(event) => updateVersionForm("name", event.target.value)} placeholder="Version original" />
+            </Field>
+            <Field label="Tono">
+              <input value={versionForm.key} onChange={(event) => updateVersionForm("key", event.target.value)} />
+            </Field>
+          </div>
+        </section>
+      ) : null}
 
       <section className="v2-structure-workspace">
         <aside className="v2-structure-list-card">
@@ -3312,7 +3405,7 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
             </div>
           </header>
 
-          {selectedSong.versions?.length > 1 ? (
+          {!isCreatingSong && selectedSong.versions?.length > 1 ? (
             <label className="form-field">
               <span>Version</span>
               <select value={selectedVersion?.id || ""} onChange={(event) => setSelectedVersionId(event.target.value)}>
@@ -3390,6 +3483,27 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
               </div>
 
               <div className="v2-structure-lyrics-card">
+                <div className="v2-section-paste-card">
+                  <label>
+                    <span>Pegar porcion en esta seccion</span>
+                    <textarea
+                      value={sectionPasteText}
+                      onChange={(event) => setSectionPasteText(event.target.value)}
+                      placeholder={"Ejemplo:\nLa       Re       Mi\nProfundo es el amor de Cristo\n\n[Fa#-]Otra linea con acordes"}
+                      rows="5"
+                    />
+                  </label>
+                  <footer>
+                    <button className="v2-primary-button" onClick={applySectionPaste} type="button">
+                      <Sparkles size={17} />
+                      Procesar en seccion
+                    </button>
+                    <button className="v2-ghost-button" onClick={() => { setSectionPasteText(""); setSectionPasteSummary(""); }} type="button">
+                      Limpiar
+                    </button>
+                    {sectionPasteSummary ? <span>{sectionPasteSummary}</span> : null}
+                  </footer>
+                </div>
                 <EditableLyricsPreview
                   lyrics={selectedSection.lyrics}
                   chords={chords}
@@ -6689,12 +6803,13 @@ function App() {
     setView("v2-editor");
   }
 
-  function openV2StructureEditor(songId = "") {
+  function openV2StructureEditor(mode = "edit", songId = "") {
     if (!isAdmin) {
       setError("Inicia sesion como administrador para estructurar canciones.");
       return;
     }
-    setEditorSelectedSongId(songId || selectedSong?.id || "");
+    setEditorMode(mode);
+    setEditorSelectedSongId(mode === "new" ? "" : songId || selectedSong?.id || "");
     setEditorReturnView("v2-songs");
     setEditorSession((value) => value + 1);
     setView("v2-structure");
@@ -6827,8 +6942,9 @@ function App() {
               }}
               onOpenClassic={() => setView("songs")}
               onEditSong={(songId) => openV2SongEditor("edit", songId)}
-              onStructureSong={(songId) => openV2StructureEditor(songId)}
+              onStructureSong={(songId) => openV2StructureEditor("edit", songId)}
               onCreateSong={() => openV2SongEditor("new")}
+              onCreateStructuredSong={() => openV2StructureEditor("new")}
               onImportSongs={() => setView("song-import")}
               onReload={loadData}
               setGlobalError={setError}
@@ -6865,6 +6981,7 @@ function App() {
                 if (songId) setSelectedSongId(songId);
               }}
               setGlobalError={setError}
+              initialMode={editorMode}
               onReturn={() => setView("v2-songs")}
             />
           </V2Shell>

@@ -1510,12 +1510,55 @@ button:disabled {
 }
 
 .v2-structure-lyrics-card {
+  display: grid;
+  gap: 14px;
   max-height: 620px;
   overflow: auto;
   border: 1px solid #d6e0ec;
   border-radius: 8px;
   background: #fff;
   padding: 16px;
+}
+
+.v2-section-paste-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #bfd4ef;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 216, 0.08), transparent 44%),
+    #f8fafc;
+}
+
+.v2-section-paste-card label {
+  display: grid;
+  gap: 8px;
+}
+
+.v2-section-paste-card label span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.v2-section-paste-card textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.v2-section-paste-card footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.v2-section-paste-card footer span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .smart-paste-card {
