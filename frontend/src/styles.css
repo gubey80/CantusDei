@@ -1368,6 +1368,156 @@ button:disabled {
   max-height: 620px;
 }
 
+.v2-structure-page {
+  display: grid;
+  gap: 16px;
+}
+
+.v2-structure-workspace {
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.v2-structure-list-card,
+.v2-structure-editor-card {
+  min-width: 0;
+  border: 1px solid #d6e0ec;
+  border-radius: 8px;
+  background: #fff;
+  padding: 16px;
+}
+
+.v2-structure-list-card,
+.v2-structure-editor-card {
+  display: grid;
+  gap: 14px;
+}
+
+.v2-structure-list-card header,
+.v2-structure-editor-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #dce5ef;
+}
+
+.v2-structure-list-card header span,
+.v2-structure-editor-card header span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.v2-structure-list-card header strong,
+.v2-structure-editor-card header strong {
+  color: var(--accent);
+  font-weight: 900;
+}
+
+.v2-structure-section-list {
+  display: grid;
+  gap: 8px;
+}
+
+.v2-structure-section-list button {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 4px 10px;
+  width: 100%;
+  min-height: 72px;
+  padding: 10px;
+  border: 1px solid #d4e0ee;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: var(--secondary);
+  text-align: left;
+}
+
+.v2-structure-section-list button > span {
+  grid-row: span 2;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  background: #e9f2ff;
+  color: #1f5bb8;
+  font-weight: 900;
+}
+
+.v2-structure-section-list button strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.v2-structure-section-list button small {
+  overflow: hidden;
+  color: var(--muted);
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v2-structure-section-list button.is-active {
+  border-color: #8db5f0;
+  background: #e9f2ff;
+}
+
+.v2-structure-section-list button.is-active > span {
+  background: var(--primary);
+  color: #fff;
+}
+
+.v2-structure-section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.v2-structure-type-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.v2-structure-type-strip button {
+  min-height: 36px;
+  border: 1px solid #d2ddec;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: var(--secondary);
+  padding: 0 12px;
+  font-weight: 850;
+}
+
+.v2-structure-type-strip button.is-active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.v2-structure-fields {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.v2-structure-lyrics-card {
+  max-height: 620px;
+  overflow: auto;
+  border: 1px solid #d6e0ec;
+  border-radius: 8px;
+  background: #fff;
+  padding: 16px;
+}
+
 .smart-paste-card {
   border-color: #bfd4ef;
   background:
