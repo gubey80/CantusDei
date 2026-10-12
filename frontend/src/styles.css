@@ -1368,6 +1368,53 @@ button:disabled {
   max-height: 620px;
 }
 
+.smart-paste-card {
+  border-color: #bfd4ef;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 216, 0.08), transparent 44%),
+    #fff;
+}
+
+.smart-paste-card p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.smart-paste-card textarea {
+  width: 100%;
+  min-height: 210px;
+  resize: vertical;
+  border: 1px solid #cbd9eb;
+  border-radius: 8px;
+  background: #f9fbff;
+  color: var(--ink);
+  padding: 13px;
+  font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.smart-paste-card textarea:focus {
+  border-color: #7aa8e8;
+  outline: 3px solid rgba(37, 99, 235, 0.12);
+}
+
+.smart-paste-card footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.smart-paste-card footer span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .topbar,
 .panel-heading {
   display: flex;

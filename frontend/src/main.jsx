@@ -1751,6 +1751,128 @@ function Field({ label, children }) {
   );
 }
 
+function cleanPastedLine(line = "") {
+  return String(line || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[“”]/g, "\"")
+    .replace(/[‘’]/g, "'")
+    .replace(/\r/g, "")
+    .replace(/\s+$/g, "");
+}
+
+function stripTrailingChordPunctuation(value = "") {
+  return String(value || "").replace(/[|,;]+$/g, "").trim();
+}
+
+function chordTokensFromLine(line = "") {
+  const tokens = [];
+  const matches = String(line || "").matchAll(/\S+/g);
+  for (const match of matches) {
+    const raw = stripTrailingChordPunctuation(match[0]);
+    if (isValidChordName(raw)) {
+      tokens.push({
+        chord: chordDisplayName(normalizeChordForLookup(raw)),
+        position: match.index || 0,
+      });
+    } else if (raw && !/^[|:.-]+$/.test(raw)) {
+      return [];
+    }
+  }
+  return tokens;
+}
+
+function isChordOnlyLine(line = "") {
+  const trimmed = cleanPastedLine(line).trim();
+  if (!trimmed || trimmed.length > 120) return false;
+  const tokens = chordTokensFromLine(trimmed);
+  return Boolean(tokens.length);
+}
+
+function normalizeInlineChordLyrics(line = "") {
+  return cleanPastedLine(line)
+    .replace(/\(([^\s()]{1,14})\)/g, (match, chord) => (isValidChordName(chord) ? `[${chordDisplayName(normalizeChordForLookup(chord))}]` : match))
+    .replace(/\{([^\s{}]{1,14})\}/g, (match, chord) => (isValidChordName(chord) ? `[${chordDisplayName(normalizeChordForLookup(chord))}]` : match))
+    .replace(/\[([^\]]{1,18})\]/g, (match, chord) => (isValidChordName(chord.trim()) ? `[${chordDisplayName(normalizeChordForLookup(chord.trim()))}]` : match));
+}
+
+function lineWithPastedChords(text = "", chordTokens = []) {
+  const chords = chordTokens.map((item) => ({
+    chord: item.chord,
+    position: Math.max(0, Math.min(Math.round(item.position || 0), String(text || "").length + EDITABLE_LINE_TAIL_SPACES)),
+  }));
+  return lineWithChordsFromText(cleanPastedLine(text), chords);
+}
+
+function parsePastedSongText(rawText = "") {
+  const lines = String(rawText || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map(cleanPastedLine);
+  const lyrics = [];
+  let title = "";
+  let key = "";
+  let artist = "";
+  let detectedChordCount = 0;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      if (lyrics.length && lyrics[lyrics.length - 1] !== "") lyrics.push("");
+      continue;
+    }
+
+    const keyMatch = trimmed.match(/^(tono|tom|key|tonalidad)\s*[:\-]\s*(.+)$/i);
+    if (keyMatch && isValidChordName(keyMatch[2])) {
+      key = chordDisplayName(normalizeChordForLookup(keyMatch[2]));
+      continue;
+    }
+
+    const titleMatch = trimmed.match(/^(titulo|title|cancion|song)\s*[:\-]\s*(.+)$/i);
+    if (titleMatch) {
+      title = titleMatch[2].trim();
+      continue;
+    }
+
+    const artistMatch = trimmed.match(/^(autor|artist|artista)\s*[:\-]\s*(.+)$/i);
+    if (artistMatch) {
+      artist = artistMatch[2].trim();
+      continue;
+    }
+
+    if (!title && !lyrics.length && !isChordOnlyLine(trimmed) && !trimmed.includes("[")) {
+      title = trimmed.replace(/\s+(acordes|letra|lyrics)$/i, "").trim();
+      continue;
+    }
+
+    if (isChordOnlyLine(line) && index + 1 < lines.length) {
+      const chordTokens = chordTokensFromLine(line);
+      const nextLine = lines[index + 1] || "";
+      lyrics.push(lineWithPastedChords(nextLine, chordTokens));
+      detectedChordCount += chordTokens.length;
+      index += 1;
+      continue;
+    }
+
+    const normalizedLine = normalizeInlineChordLyrics(line);
+    detectedChordCount += extractUniqueChords(normalizedLine).length;
+    lyrics.push(normalizedLine);
+  }
+
+  const cleanLyrics = lyrics.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  const firstChord = extractUniqueChords(cleanLyrics)[0] || "";
+  return {
+    title,
+    artist,
+    key: key || (firstChord ? chordDisplayName(chordMainPart(firstChord)) : ""),
+    lyrics: cleanLyrics,
+    chordCount: detectedChordCount,
+    lineCount: cleanLyrics ? cleanLyrics.split("\n").filter((line) => line.trim()).length : 0,
+  };
+}
+
 function SongEditorView({ songs, chords = [], selectedSong, onSelectSong, search, setSearch, onReload, setGlobalError, initialMode = "edit", returnAction = null }) {
   const [selectedVersionId, setSelectedVersionId] = useState("");
   const [isCreatingSong, setIsCreatingSong] = useState(initialMode === "new");
@@ -1762,6 +1884,8 @@ function SongEditorView({ songs, chords = [], selectedSong, onSelectSong, search
   const [capoMode, setCapoMode] = useState("keepShapes");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [smartPasteText, setSmartPasteText] = useState("");
+  const [smartPasteSummary, setSmartPasteSummary] = useState("");
   const songbooks = useMemo(() => {
     const byCode = new Map();
     songs.forEach((song) => {
@@ -1836,6 +1960,28 @@ function SongEditorView({ songs, chords = [], selectedSong, onSelectSong, search
 
   function updateVersionForm(field, value) {
     setVersionForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function applySmartPaste() {
+    const parsed = parsePastedSongText(smartPasteText);
+    if (!parsed.lyrics) {
+      setGlobalError("Pegá una canción con letra para poder procesarla.");
+      return;
+    }
+
+    setSongForm((current) => ({
+      ...current,
+      title: current.title || parsed.title,
+      artist: current.artist || parsed.artist,
+    }));
+    setVersionForm((current) => ({
+      ...current,
+      key: parsed.key || current.key || "C",
+      name: current.name || `Tono ${parsed.key || current.key || "C"}`,
+      lyrics: parsed.lyrics,
+    }));
+    setSmartPasteSummary(`Procesado: ${parsed.lineCount} linea(s), ${extractUniqueChords(parsed.lyrics).length} acorde(s) detectado(s).`);
+    setMessage("Cancion pegada y convertida al formato CantusDei.");
   }
 
   function startNewSong() {
@@ -2635,6 +2781,36 @@ function V2SongEditorView({ selectedSong, chords = [], onReload, setGlobalError,
       {message ? <p className="success-box">{message}</p> : null}
 
       <div className="v2-editor-grid">
+        {isCreatingSong ? (
+          <section className="v2-edit-card smart-paste-card">
+            <header>
+              <div>
+                <span>Pegar cancion</span>
+                <strong>Convertir texto copiado</strong>
+              </div>
+            </header>
+            <p>
+              Pegá una canción desde otra página. CantusDei intenta detectar título, tono y acordes, y convierte la letra al formato interno para transponer, editar y proyectar.
+            </p>
+            <textarea
+              value={smartPasteText}
+              onChange={(event) => setSmartPasteText(event.target.value)}
+              placeholder={"Ejemplo:\nTono: La\n\nLa       Re       Mi\nProfundo es el amor de Cristo\n\n[Fa#-7]Otra linea con acordes inline"}
+              rows="9"
+            />
+            <footer>
+              <button className="v2-primary-button" onClick={applySmartPaste} type="button">
+                <Sparkles size={17} />
+                Procesar pegado
+              </button>
+              <button className="v2-ghost-button" onClick={() => { setSmartPasteText(""); setSmartPasteSummary(""); }} type="button">
+                Limpiar
+              </button>
+              {smartPasteSummary ? <span>{smartPasteSummary}</span> : null}
+            </footer>
+          </section>
+        ) : null}
+
         <section className="v2-edit-card">
           <header>
             <span>Datos generales</span>
