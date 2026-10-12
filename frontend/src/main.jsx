@@ -2762,6 +2762,9 @@ function V2SongEditorView({ selectedSong, chords = [], onReload, setGlobalError,
   }
 
   const previewChords = extractUniqueChords(versionForm.lyrics);
+  const editorHeadingTitle = isCreatingSong
+    ? songForm.title || "Nueva cancion"
+    : songForm.title || selectedSong?.title || "Cancion sin titulo";
   if (!isCreatingSong && !selectedSong) {
     return (
       <section className="v2-editor-page">
@@ -2787,7 +2790,7 @@ function V2SongEditorView({ selectedSong, chords = [], onReload, setGlobalError,
         </button>
         <div>
           <span>{isCreatingSong ? "Nueva cancion" : "Editar cancion"}</span>
-          <h2>{songForm.title || selectedSong?.title || "Cancion sin titulo"}</h2>
+          <h2>{editorHeadingTitle}</h2>
           <p>Modifica datos, versiones, tono, capo, letra con acordes y link para escuchar.</p>
         </div>
         <div className="v2-editor-main-actions">
@@ -6340,7 +6343,7 @@ function App() {
       return;
     }
     setEditorMode(mode);
-    setEditorSelectedSongId(songId || selectedSong?.id || "");
+    setEditorSelectedSongId(mode === "new" ? "" : songId || selectedSong?.id || "");
     setEditorReturnView("v2-songs");
     setEditorSession((value) => value + 1);
     setView("v2-editor");
