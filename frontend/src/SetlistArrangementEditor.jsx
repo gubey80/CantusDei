@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { ArrowDown, ArrowUp, ChevronLeft, Copy, GripVertical, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, Copy, GripVertical, Library, ListMusic, MessageSquareText, Plus, Save, Trash2 } from "lucide-react";
 
-const copyBlock = (block) => ({ id: crypto.randomUUID(), type: block.type, name: block.name, lyrics: block.lyrics });
+const copyBlock = (block) => ({ id: crypto.randomUUID(), type: block.type, name: block.name, lyrics: block.lyrics, comment: block.comment || "" });
 
 export default function SetlistArrangementEditor({ items, setlistName, parseSections, onSave, onClose }) {
   const [itemId, setItemId] = useState(items[0]?.localId || "");
@@ -73,12 +73,12 @@ export default function SetlistArrangementEditor({ items, setlistName, parseSect
         <div><span>{setlistName}</span><h2>Armado de ejecucion</h2><p>{item?.songTitle} · Tono {item?.key}</p></div>
         <button className="v2-primary-button" disabled={saving || !dirty} onClick={save} type="button"><Save size={17} /> {saving ? "Guardando..." : "Guardar en setlist"}</button>
       </header>
-      <label className="form-field"><span>Cancion del evento</span><select value={itemId} disabled={saving} onChange={(event) => switchSong(event.target.value)}>{items.map((entry, index) => <option key={entry.localId} value={entry.localId}>{index + 1}. {entry.songTitle} - {entry.key}</option>)}</select></label>
+      <label className="form-field arrangement-song-picker"><span>Cancion del evento · {items.findIndex((entry) => entry.localId === itemId) + 1} de {items.length}</span><select value={itemId} disabled={saving} onChange={(event) => switchSong(event.target.value)}>{items.map((entry, index) => <option key={entry.localId} value={entry.localId}>{index + 1}. {entry.songTitle} - {entry.key}{entry.arrangement?.length ? " · Ejecucion guardada" : " · Orden base"}</option>)}</select></label>
       {error ? <p className="error-box" role="alert">{error}</p> : null}
       {notice ? <p className="success-box" role="status">{notice}</p> : null}
       <fieldset disabled={saving} className="arrangement-workspace">
         <aside className="arrangement-source">
-          <h3>Estructura base</h3>
+          <header className="arrangement-panel-heading"><h3><Library size={18} aria-hidden="true" /> Estructura base original</h3><span className="arrangement-panel-tag">Original</span></header>
           <div className="arrangement-block-list">
             {base.map((block, index) => <article className="arrangement-block" key={block.id} draggable onDragStart={(event) => { setDrag({ source: "base", index }); event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("text/plain", block.name); }} onDragEnd={() => setDrag(null)}>
               <div className="arrangement-block-head"><GripVertical size={16} aria-hidden="true" /><strong>{block.name}</strong><button type="button" aria-label={`Agregar ${block.name}`} title={`Agregar ${block.name}`} onClick={() => change([...blocks, copyBlock(block)])}><Plus size={16} /></button></div>
@@ -87,7 +87,7 @@ export default function SetlistArrangementEditor({ items, setlistName, parseSect
           </div>
         </aside>
         <section className="arrangement-order">
-          <header className="arrangement-order-header"><h3>Ejecucion del evento</h3><button type="button" className="v2-ghost-button" onClick={() => { if (window.confirm("Restaurar el orden base de esta cancion para el evento?")) change(base.map(copyBlock)); }}>Restaurar base</button></header>
+          <header className="arrangement-order-header"><h3><ListMusic size={18} aria-hidden="true" /> Ejecucion del evento</h3><button type="button" className="v2-ghost-button" onClick={() => { if (window.confirm("Restaurar el orden base de esta cancion para el evento y quitar sus comentarios?")) change(base.map(copyBlock)); }}>Restaurar base</button></header>
           <ol className={`arrangement-block-list${drag ? " is-dragging" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => drop(event, blocks.length)}>
             {blocks.map((block, index) => <li key={block.id} className="arrangement-block" draggable onDragStart={(event) => { setDrag({ source: "event", index }); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", block.name); }} onDragEnd={() => setDrag(null)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => drop(event, index)}>
               <div className="arrangement-block-head"><GripVertical size={16} aria-hidden="true" /><span className="arrangement-position">{index + 1}</span><strong>{block.name}</strong><div className="arrangement-actions">
@@ -97,6 +97,17 @@ export default function SetlistArrangementEditor({ items, setlistName, parseSect
                 <button type="button" title="Quitar del evento" aria-label={`Quitar ${block.name}`} onClick={() => change(blocks.filter((_, blockIndex) => blockIndex !== index))}><Trash2 size={16} /></button>
               </div></div>
               <p>{block.lyrics.replace(/\[[^\]]+\]/g, "").slice(0, 140) || "Instrumental"}</p>
+              <label className="arrangement-comment" draggable={false} onDragStart={(event) => event.stopPropagation()}>
+                <span><MessageSquareText size={15} aria-hidden="true" /> Comentario opcional</span>
+                <textarea
+                  aria-label={`Comentario para ${block.name} (parte ${index + 1})`}
+                  value={block.comment || ""}
+                  maxLength={2000}
+                  rows={2}
+                  placeholder="Ej.: solo voces y teclado; entra bateria en la segunda vuelta"
+                  onChange={(event) => change(blocks.map((entry, blockIndex) => blockIndex === index ? { ...entry, comment: event.target.value } : entry))}
+                />
+              </label>
             </li>)}
             {!blocks.length ? <li className="empty-message">Sin partes en la ejecucion</li> : null}
           </ol>

@@ -10,6 +10,7 @@ const arrangementSchema = z.array(z.object({
   type: z.enum(["intro", "verse", "prechorus", "chorus", "bridge", "solo", "instrumental", "final", "other"]),
   name: z.string().trim().min(1).max(120),
   lyrics: z.string().max(100000),
+  comment: z.string().max(2000).default(""),
 })).max(200);
 
 const itemSchema = z.object({

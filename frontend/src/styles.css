@@ -1616,7 +1616,75 @@ button:disabled {
   background: #fff;
 }
 
-.arrangement-source .arrangement-block { background: #f8fafc; }
+.arrangement-source .arrangement-block {
+  background: #f4f6f8;
+  border-color: #dce1e7;
+}
+
+.arrangement-order .arrangement-block {
+  background: #f4fbf8;
+  border-color: #bdded0;
+  border-left: 4px solid #248263;
+}
+
+.arrangement-panel-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.arrangement-panel-heading h3 { margin: 0; }
+
+.arrangement-page h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.arrangement-panel-heading h3 { color: #596575; }
+.arrangement-order-header h3 { color: #17684f; }
+
+.arrangement-panel-tag {
+  color: #596575;
+  background: #e8edf1;
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+.arrangement-song-picker { max-width: 720px; }
+
+.arrangement-comment {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #d1e7dc;
+}
+
+.arrangement-comment > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #326653;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.arrangement-comment textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 68px;
+  resize: vertical;
+  background: #fff;
+  border: 1px solid #bfd7ca;
+  border-radius: 6px;
+  padding: 10px;
+  color: var(--ink);
+  font: inherit;
+}
 
 .arrangement-block-head,
 .arrangement-actions {
@@ -1648,7 +1716,7 @@ button:disabled {
 
 .arrangement-position {
   min-width: 28px;
-  color: var(--primary);
+  color: #17684f;
   font-weight: 800;
 }
 

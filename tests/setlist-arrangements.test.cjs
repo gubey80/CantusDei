@@ -55,3 +55,20 @@ test("el backend valida bloques y acepta items anteriores sin armado", () => {
   assert.equal(arrangementSchema.safeParse([{ ...arrangement[0], name: "" }]).success, false);
   assert.equal(itemSchema.parse({ songVersionId: "version", position: 1 }).arrangement, undefined);
 });
+
+test("comentarios opcionales se conservan por bloque sin mezclarse con la letra", () => {
+  const blocks = schemaContext.schemas.arrangementSchema.parse([
+    { ...arrangement[0], comment: "Solo voces" },
+    { ...arrangement[2], comment: "Toda la banda" },
+    arrangement[1],
+  ]);
+  assert.equal(blocks[0].comment, "Solo voces");
+  assert.equal(blocks[1].comment, "Toda la banda");
+  assert.equal(blocks[2].comment, "");
+  assert.equal(schemaContext.schemas.arrangementSchema.safeParse([{ ...arrangement[0], comment: "x".repeat(2001) }]).success, false);
+  const payload = helpers.setlistPayload({ name: "Evento", date: "2026-10-18" }, helpers.setlistItemsToOrder([{ ...item, arrangement: blocks }]));
+  assert.equal(payload.items[0].arrangement[0].comment, "Solo voces");
+  const lyrics = helpers.serializeBaseSectionsToLyrics(blocks);
+  assert.equal(lyrics.includes("Solo voces"), false);
+  assert.equal(lyrics.includes("Toda la banda"), false);
+});
