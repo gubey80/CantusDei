@@ -382,7 +382,7 @@ function splitVisibleLineAt(lyrics = "", lineIndex, position = 0) {
   const afterChords = [];
 
   parsed.chords.forEach((item) => {
-    if (item.position <= safePosition) {
+    if (item.position < safePosition) {
       beforeChords.push({ ...item, position: Math.min(item.position, beforeText.length) });
     } else {
       afterChords.push({ ...item, position: Math.max(0, item.position - safePosition) });
@@ -795,6 +795,7 @@ function VersionButton({ version, active, onClick }) {
 }
 
 function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
+  const editorRef = useRef(null);
   const [activeChord, setActiveChord] = useState(null);
   const [draftChord, setDraftChord] = useState("");
   const [focusChord, setFocusChord] = useState(null);
@@ -860,7 +861,20 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
     const position = caretOffsetInElement(event.currentTarget);
     if (event.key === "Enter") {
       event.preventDefault();
-      onChange(splitVisibleLineAt(lyrics, lineIndex, position));
+      const currentLyrics = replaceVisibleLineAt(lyrics, lineIndex, event.currentTarget.textContent?.replace(/\u00a0/g, " ") || "");
+      onChange(splitVisibleLineAt(currentLyrics, lineIndex, position));
+      closeChordEditor();
+      window.requestAnimationFrame(() => {
+        const nextLine = editorRef.current?.querySelector(`[data-text-line="${lineIndex + 1}"]`);
+        if (!nextLine) return;
+        nextLine.focus();
+        const range = document.createRange();
+        range.selectNodeContents(nextLine);
+        range.collapse(true);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      });
       return;
     }
     if (event.key === "Backspace" && position === 0 && lineIndex > 0) {
@@ -950,7 +964,7 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
   }
 
   return (
-    <div className="editable-lyrics-preview">
+    <div className="editable-lyrics-preview" ref={editorRef}>
       {String(lyrics || "").split("\n").map((line, lineIndex) => {
         const parsed = parseEditableLyricLine(line);
         if (isSongSectionLabel(parsed.text, parsed.chords)) {
@@ -984,6 +998,7 @@ function EditableLyricsPreview({ lyrics, chords = [], onChange }) {
               ) : null}
             </div>
             <pre
+              data-text-line={lineIndex}
               className="editable-text-row"
               contentEditable
               suppressContentEditableWarning
@@ -1900,6 +1915,25 @@ function lineWithPastedChords(text = "", chordTokens = []) {
     position: Math.max(0, Math.min(Math.round(item.position || 0), String(text || "").length + EDITABLE_LINE_TAIL_SPACES)),
   }));
   return lineWithChordsFromText(cleanPastedLine(text), chords);
+}
+
+function splitSectionTextAt(text, caret) {
+  const lines = text.split("\n");
+  const lineIndex = text.slice(0, caret).split("\n").length - 1;
+  const position = caret - (text.lastIndexOf("\n", caret - 1) + 1);
+  if (lineIndex === 0 || !isChordOnlyLine(lines[lineIndex - 1]) || isChordOnlyLine(lines[lineIndex])) return null;
+  const chords = chordTokensFromLine(lines[lineIndex - 1]);
+  const beforeText = lines[lineIndex].slice(0, position);
+  const afterText = lines[lineIndex].slice(position);
+  const beforeChords = chords.filter((item) => item.position < position);
+  const afterChords = chords.filter((item) => item.position >= position)
+    .map((item) => ({ ...item, position: item.position - position }));
+  const before = beforeChords.length ? [buildChordLine(beforeText, beforeChords), beforeText] : [beforeText];
+  const after = afterChords.length ? [buildChordLine(afterText, afterChords), afterText] : [afterText];
+  const head = lines.slice(0, lineIndex - 1);
+  const nextCaret = [...head, ...before, ...after.slice(0, -1)].join("\n").length + 1;
+  lines.splice(lineIndex - 1, 2, ...before, ...after);
+  return { text: lines.join("\n"), caret: nextCaret };
 }
 
 function parsePastedSongText(rawText = "", { detectTitle = true } = {}) {
@@ -3543,6 +3577,16 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
                       ref={sectionContentRef}
                       value={sectionPasteText}
                       onChange={(event) => setSectionPasteText(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                        const textarea = event.currentTarget;
+                        if (textarea.selectionStart !== textarea.selectionEnd) return;
+                        const result = splitSectionTextAt(textarea.value, textarea.selectionStart);
+                        if (!result) return;
+                        event.preventDefault();
+                        setSectionPasteText(result.text);
+                        window.requestAnimationFrame(() => textarea.setSelectionRange(result.caret, result.caret));
+                      }}
                       placeholder={"Ejemplo:\nLa       Re       Mi\nProfundo es el amor de Cristo\n\n[Fa#-]Otra linea con acordes"}
                       rows="5"
                     />
