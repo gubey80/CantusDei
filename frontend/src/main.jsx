@@ -451,11 +451,11 @@ function buildChordLine(text, chords) {
   return chars.join("").replace(/\s+$/, "");
 }
 
+const BASE_SECTION_HEADING = /^(intro|introducci[oó]n|verso|estrofa|pre[- ]?coro|pre[- ]?estribillo|estribillo|chorus|coro|puente|bridge|solo|interludio|instrumental|final|outro|otro)(?:\s*(?:x\s*)?\d+)?$/i;
+
 function isSongSectionLabel(text, chords = []) {
   if (chords.length) return false;
-  return /^(intro|introduccion|verso(?:\s+\d+)?|estrofa(?:\s+\d+)?|pre[- ]?coro|coro(?:\s+x?\d+)?|puente|interludio|instrumental|final|outro)(?:\s*[:.-])?$/i.test(
-    normalizeSearchText(text.trim()),
-  );
+  return BASE_SECTION_HEADING.test(text.trim().replace(/\s*[:.-]\s*$/, ""));
 }
 
 const BASE_SECTION_TYPES = [
@@ -503,20 +503,25 @@ function createBaseSection(type = "verse", index = 1) {
 }
 
 function parseBaseSectionsFromLyrics(lyrics = "") {
-  const lines = String(lyrics || "").split("\n");
+  const lines = String(lyrics || "").split(/\r?\n/);
   const sections = [];
   let current = null;
 
   lines.forEach((line) => {
+    const colonIndex = line.indexOf(":");
+    const prefix = colonIndex >= 0 ? line.slice(0, colonIndex).trim() : "";
+    const hasInlineHeading = BASE_SECTION_HEADING.test(prefix);
     const parsed = parseLyricLine(line);
-    if (isSongSectionLabel(parsed.text, parsed.chords)) {
+    if (hasInlineHeading || isSongSectionLabel(parsed.text, parsed.chords)) {
       if (current) sections.push({ ...current, lyrics: current.lines.join("\n").trim() });
-      const name = parsed.text.trim().replace(/\s*[:.-]\s*$/, "");
+      const name = hasInlineHeading ? prefix : parsed.text.trim().replace(/\s*[:.-]\s*$/, "");
       current = {
         id: `section-${sections.length}-${normalizeSearchText(name) || "parte"}`,
         type: sectionTypeFromName(name),
         name,
-        lines: [],
+        lines: hasInlineHeading && line.slice(colonIndex + 1).trim()
+          ? [line.slice(colonIndex + 1).trimStart()]
+          : [],
       };
       return;
     }
@@ -3167,7 +3172,7 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
   const [versionForm, setVersionForm] = useState(EMPTY_VERSION);
   const [sections, setSections] = useState(() => [createBaseSection("verse", 1)]);
   const [selectedSectionId, setSelectedSectionId] = useState("");
-  const [sectionPasteText, setSectionPasteText] = useState("");
+  const [sectionPasteDrafts, setSectionPasteDrafts] = useState({});
   const [sectionPasteSummary, setSectionPasteSummary] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -3178,6 +3183,16 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
   }, [isCreatingSong, selectedSong, selectedVersionId]);
 
   const selectedSection = sections.find((section) => section.id === selectedSectionId) || sections[0] || null;
+  const sectionPasteText = sectionPasteDrafts[selectedSection?.id] || "";
+
+  function setSectionPasteText(value) {
+    if (!selectedSection) return;
+    setSectionPasteDrafts((current) => ({ ...current, [selectedSection.id]: value }));
+  }
+
+  useEffect(() => {
+    setSectionPasteSummary("");
+  }, [selectedSection?.id]);
 
   useEffect(() => {
     if (isCreatingSong) return;
@@ -3422,7 +3437,8 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
             {sections.map((section, index) => (
               <button
                 key={section.id}
-                className={section.id === selectedSectionId ? "is-active" : ""}
+                className={section.id === selectedSection?.id ? "is-active" : ""}
+                aria-pressed={section.id === selectedSection?.id}
                 onClick={() => setSelectedSectionId(section.id)}
                 type="button"
               >
@@ -3485,7 +3501,7 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
               <div className="v2-structure-lyrics-card">
                 <div className="v2-section-paste-card">
                   <label>
-                    <span>Pegar porcion en esta seccion</span>
+                    <span>Pegar porcion en {selectedSection.name || sectionTypeLabel(selectedSection.type)}</span>
                     <textarea
                       value={sectionPasteText}
                       onChange={(event) => setSectionPasteText(event.target.value)}
@@ -3505,6 +3521,7 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
                   </footer>
                 </div>
                 <EditableLyricsPreview
+                  key={selectedSection.id}
                   lyrics={selectedSection.lyrics}
                   chords={chords}
                   onChange={(nextLyrics) => updateSection(selectedSection.id, "lyrics", nextLyrics)}
