@@ -1,0 +1,105 @@
+.setlist-stage-monitor {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  padding: 0 28px;
+  overflow: hidden;
+  background: #101313;
+  color: #f4f6f4;
+  font-family: Inter, "Segoe UI", sans-serif;
+  letter-spacing: 0;
+}
+
+.setlist-stage-monitor * { box-sizing: border-box; }
+.setlist-stage-monitor button,
+.setlist-stage-monitor input,
+.setlist-stage-monitor select { font: inherit; }
+.setlist-stage-monitor button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid #3b4540;
+  border-radius: 6px;
+  color: #e8efeb;
+  background: #202925;
+}
+.setlist-stage-monitor button:disabled { opacity: .45; }
+.setlist-stage-monitor button:focus-visible,
+.setlist-stage-monitor input:focus-visible,
+.setlist-stage-monitor select:focus-visible { outline: 2px solid #8ce1c3; outline-offset: 2px; }
+.setlist-stage-monitor button[aria-pressed="true"] { background: #205a49; border-color: #8ce1c3; }
+.stage-topbar,
+.stage-header-actions,
+.stage-song-header,
+.stage-transport,
+.stage-toggles { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.stage-topbar { flex: 0 0 auto; padding: 14px 0; border-bottom: 1px solid #303737; }
+.stage-topbar > div:not(.stage-header-actions) { flex: 1; min-width: 100px; }
+.stage-topbar strong { font-size: 14px; }
+.stage-topbar small { display: block; margin-top: 4px; color: #a8b5b0; font-size: 12px; }
+.stage-song-header { justify-content: space-between; flex: 0 0 auto; padding: 18px 0; }
+.stage-song-header h2 { margin: 0; font-size: 24px; color: #f4f6f4; overflow-wrap: anywhere; }
+.stage-song-header > span { color: #a8b5b0; }
+.stage-song-header strong { color: #8ce1c3; font-size: 24px; }
+.stage-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 28px; padding: 12px 0 20px; }
+.stage-current { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.stage-section-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 0 0 18px; flex: 0 0 auto; }
+.stage-section-heading h3 { color: #8ce1c3; font-size: 20px; margin: 0; }
+.stage-section-heading > span,
+.stage-section-heading > small { color: #a8b5b0; font-size: 13px; }
+.stage-section-heading small { margin-left: auto; }
+.stage-lyrics-scroll { overflow: auto; min-height: 0; padding: 4px 14px 10px 0; scrollbar-color: #3c6050 #101313; }
+.stage-lyrics { font: 600 var(--stage-font-size)/1.4 "Cascadia Mono", Consolas, monospace; }
+.stage-lyric-line { margin: 0 0 12px; white-space: normal; overflow-wrap: anywhere; }
+.stage-word { position: relative; display: inline-block; max-width: 100%; padding-top: 25px; white-space: pre-wrap; vertical-align: top; }
+.stage-word-chords { position: absolute; top: 0; left: 0; width: 100%; height: 24px; }
+.stage-chord-anchor { position: absolute; top: 0; }
+.stage-chord-anchor b { display: block; font: 600 17px/1.3 "Cascadia Mono", Consolas, monospace; white-space: pre; color: #8ce1c3; }
+.stage-lyrics.without-chords .stage-word { padding-top: 0; }
+.stage-sidebar { min-width: 0; min-height: 0; overflow: auto; border-left: 1px solid #303737; padding-left: 24px; display: flex; flex-direction: column; justify-content: space-between; gap: 24px; }
+.stage-sidebar section > span { display: flex; align-items: center; gap: 8px; color: #a8b5b0; font-size: 12px; }
+.stage-cue p { font-size: 20px; color: #e0c98b; line-height: 1.5; margin: 12px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.stage-upcoming h3 { margin: 12px 0 8px; font-size: 22px; color: #e1e9e4; }
+.stage-upcoming p { color: #a8b5b0; margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.stage-playback-status { flex: 0 0 auto; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 8px 0; color: #a8b5b0; font-size: 12px; font-variant-numeric: tabular-nums; }
+.stage-progress { flex: 0 0 3px; height: 3px; background: #303737; }
+.stage-progress > div { height: 100%; background: #8ce1c3; }
+.stage-sequence { flex: 0 0 auto; display: flex; gap: 6px; padding: 10px 0; overflow-x: auto; max-height: 66px; }
+.setlist-stage-monitor .stage-sequence button { flex: 0 0 auto; border: 0; background: transparent; color: #a8b5b0; white-space: nowrap; }
+.setlist-stage-monitor .stage-sequence button[aria-current="step"] { background: #193b2d; color: #8ce1c3; }
+.stage-operator { flex: 0 0 auto; max-height: 40dvh; overflow: auto; background: #1b211e; border-top: 1px solid #303737; padding: 14px 0 max(14px, env(safe-area-inset-bottom)); }
+.setlist-stage-monitor .stage-play { background: #205a49; border-color: #367e64; min-width: 120px; }
+.stage-settings { display: grid; grid-template-columns: minmax(160px, 1.4fr) repeat(3, minmax(120px, 1fr)); gap: 16px; margin-top: 16px; }
+.stage-settings > label { display: grid; align-content: start; gap: 8px; font-size: 12px; color: #b5c3bb; min-width: 0; }
+.setlist-stage-monitor .stage-settings select,
+.setlist-stage-monitor .stage-settings input[type="number"] { width: 100%; min-width: 0; height: 38px; padding: 6px 8px; border: 1px solid #45534a; border-radius: 6px; background: #101813; color: #e8efeb; font-size: 14px; }
+.stage-settings input[type="range"] { width: 100%; margin: 0; min-height: 38px; accent-color: #8ce1c3; }
+.stage-toggles { padding-top: 12px; }
+.stage-toggles label { display: flex; align-items: center; gap: 8px; min-height: 30px; color: #c5d1ca; font-size: 13px; }
+.stage-toggles input { accent-color: #8ce1c3; }
+.stage-error { color: #f0cd91; padding: 8px; margin: 0; }
+@media (max-width: 740px) {
+  .setlist-stage-monitor { padding: 0 12px; }
+  .stage-topbar { gap: 8px; padding: 8px 0; }
+  .stage-topbar > div:not(.stage-header-actions) { min-width: 120px; }
+  .stage-header-actions { margin-left: auto; }
+  .stage-song-header { padding: 10px 0; }
+  .stage-song-header h2 { font-size: 20px; }
+  .stage-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(70px, 1fr) auto; gap: 10px; padding: 8px 0; }
+  .stage-sidebar { max-height: 110px; border-left: 0; border-top: 1px solid #303737; padding: 10px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .stage-body.comments-hidden .stage-sidebar { grid-template-columns: 1fr; }
+  .stage-cue p { font-size: 15px; margin-top: 6px; }
+  .stage-upcoming h3 { font-size: 17px; margin: 6px 0; }
+  .stage-upcoming p { font-size: 13px; }
+  .stage-section-heading { padding-bottom: 8px; }
+  .stage-settings { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .stage-operator { max-height: 34dvh; padding-top: 10px; }
+  .setlist-stage-monitor button { min-height: 44px; }
+}

@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { api, API_URL, setAuthToken } from "./api.js";
 import SetlistArrangementEditor from "./SetlistArrangementEditor.jsx";
+import SetlistMonitor from "./SetlistMonitor.jsx";
 import "./styles.css";
 
 const DEFAULT_CHORDS = {
@@ -4263,6 +4264,10 @@ function V2SetlistsView({ setlists, setlistsLoading, chords, onReload, setGlobal
     if (value === "pdf-chords") openPdf(true);
   }
 
+  if (sessionMode === "monitor" && selectedSetlist) {
+    return <SetlistMonitor form={form} items={orderItems} parseSections={parseBaseSectionsFromLyrics} parseLine={parseLyricLine} onClose={() => setSessionMode("")} />;
+  }
+
   if (sessionMode && selectedSetlist) {
     return (
       <SetlistProjection
@@ -4440,6 +4445,7 @@ function V2SetlistsView({ setlists, setlistsLoading, chords, onReload, setGlobal
           {message ? <p className="success-box">{message}</p> : null}
 
           <footer className="v2-setlist-bottom-actions">
+            <button onClick={() => setSessionMode("monitor")} disabled={!orderItems.length || setlistDetailLoading} type="button"><Monitor size={17} /> Modo Monitor</button>
             {isAdmin ? <button onClick={() => setScreen("arrangement")} disabled={!orderItems.length || saving} type="button"><ListPlus size={17} /> Armado de ejecucion</button> : null}
             <button className="projection-action" onClick={() => setSessionMode("projection")} disabled={!orderItems.length} type="button">
               <Monitor size={17} /> Proyeccion
