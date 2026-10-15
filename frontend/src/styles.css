@@ -1512,8 +1512,8 @@ button:disabled {
 .v2-structure-lyrics-card {
   display: grid;
   gap: 14px;
-  max-height: 620px;
-  overflow: auto;
+  min-width: 0;
+  overflow-x: auto;
   border: 1px solid #d6e0ec;
   border-radius: 8px;
   background: #fff;
@@ -1545,7 +1545,9 @@ button:disabled {
 
 .v2-section-paste-card textarea {
   width: 100%;
-  resize: vertical;
+  max-height: none;
+  overflow-y: hidden;
+  resize: none;
 }
 
 .v2-section-paste-card footer {

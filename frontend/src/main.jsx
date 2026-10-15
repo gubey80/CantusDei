@@ -3173,6 +3173,7 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
   const [sections, setSections] = useState(() => [createBaseSection("verse", 1)]);
   const [selectedSectionId, setSelectedSectionId] = useState("");
   const [sectionPasteDrafts, setSectionPasteDrafts] = useState({});
+  const sectionContentRef = useRef(null);
   const [sectionPasteSummary, setSectionPasteSummary] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -3192,6 +3193,27 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
         : parsed.text;
     })
     .join("\n");
+
+  useEffect(() => {
+    const textarea = sectionContentRef.current;
+    if (!textarea) return;
+    const fitContent = () => {
+      textarea.style.height = "auto";
+      const style = window.getComputedStyle(textarea);
+      const border = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+      textarea.style.height = `${textarea.scrollHeight + border}px`;
+    };
+    fitContent();
+    let previousWidth = textarea.clientWidth;
+    const observer = new ResizeObserver(() => {
+      const width = textarea.clientWidth;
+      if (width === previousWidth) return;
+      previousWidth = width;
+      fitContent();
+    });
+    observer.observe(textarea);
+    return () => observer.disconnect();
+  }, [sectionPasteText, selectedSection?.id]);
 
   function setSectionPasteText(value) {
     if (!selectedSection) return;
@@ -3518,6 +3540,7 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
                   <label>
                     <span>Contenido de la seccion: {selectedSection.name || sectionTypeLabel(selectedSection.type)}</span>
                     <textarea
+                      ref={sectionContentRef}
                       value={sectionPasteText}
                       onChange={(event) => setSectionPasteText(event.target.value)}
                       placeholder={"Ejemplo:\nLa       Re       Mi\nProfundo es el amor de Cristo\n\n[Fa#-]Otra linea con acordes"}
