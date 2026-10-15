@@ -1902,7 +1902,7 @@ function lineWithPastedChords(text = "", chordTokens = []) {
   return lineWithChordsFromText(cleanPastedLine(text), chords);
 }
 
-function parsePastedSongText(rawText = "") {
+function parsePastedSongText(rawText = "", { detectTitle = true } = {}) {
   const lines = String(rawText || "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
@@ -1941,7 +1941,7 @@ function parsePastedSongText(rawText = "") {
       continue;
     }
 
-    if (!title && !lyrics.length && !isChordOnlyLine(trimmed) && !trimmed.includes("[")) {
+    if (detectTitle && !title && !lyrics.length && !isChordOnlyLine(trimmed) && !trimmed.includes("[")) {
       title = trimmed.replace(/\s+(acordes|letra|lyrics)$/i, "").trim();
       continue;
     }
@@ -3183,7 +3183,15 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
   }, [isCreatingSong, selectedSong, selectedVersionId]);
 
   const selectedSection = sections.find((section) => section.id === selectedSectionId) || sections[0] || null;
-  const sectionPasteText = sectionPasteDrafts[selectedSection?.id] || "";
+  const sectionPasteText = sectionPasteDrafts[selectedSection?.id] ?? String(selectedSection?.lyrics || "")
+    .split("\n")
+    .map((line) => {
+      const parsed = parseLyricLine(line);
+      return parsed.chords.length
+        ? `${buildChordLine(parsed.text, parsed.chords)}\n${parsed.text}`
+        : parsed.text;
+    })
+    .join("\n");
 
   function setSectionPasteText(value) {
     if (!selectedSection) return;
@@ -3226,6 +3234,13 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
   }
 
   function updateSection(sectionId, field, value) {
+    if (field === "lyrics") {
+      setSectionPasteDrafts((current) => {
+        const next = { ...current };
+        delete next[sectionId];
+        return next;
+      });
+    }
     setSections((current) => current.map((section) => (
       section.id === sectionId ? { ...section, [field]: value } : section
     )));
@@ -3275,7 +3290,7 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
 
   function applySectionPaste() {
     if (!selectedSection) return;
-    const parsed = parsePastedSongText(sectionPasteText);
+    const parsed = parsePastedSongText(sectionPasteText, { detectTitle: false });
     const nextLyrics = parsed.lyrics || sectionPasteText.trim();
     if (!nextLyrics) {
       setGlobalError("Pega una porcion de cancion para agregarla a la seccion.");
@@ -3284,7 +3299,7 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
     updateSection(selectedSection.id, "lyrics", nextLyrics);
     if (parsed.key) updateVersionForm("key", parsed.key);
     setSectionPasteSummary(`Seccion actualizada: ${nextLyrics.split("\n").filter((line) => line.trim()).length} linea(s), ${extractUniqueChords(nextLyrics).length} acorde(s).`);
-    setMessage("Porcion pegada en la seccion seleccionada.");
+    setMessage("Contenido de la seccion actualizado.");
   }
 
   async function saveStructure() {
@@ -3501,7 +3516,7 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
               <div className="v2-structure-lyrics-card">
                 <div className="v2-section-paste-card">
                   <label>
-                    <span>Pegar porcion en {selectedSection.name || sectionTypeLabel(selectedSection.type)}</span>
+                    <span>Contenido de la seccion: {selectedSection.name || sectionTypeLabel(selectedSection.type)}</span>
                     <textarea
                       value={sectionPasteText}
                       onChange={(event) => setSectionPasteText(event.target.value)}
@@ -3512,7 +3527,7 @@ function V2BaseStructureEditorView({ selectedSong, chords = [], onReload, setGlo
                   <footer>
                     <button className="v2-primary-button" onClick={applySectionPaste} type="button">
                       <Sparkles size={17} />
-                      Procesar en seccion
+                      Aplicar cambios
                     </button>
                     <button className="v2-ghost-button" onClick={() => { setSectionPasteText(""); setSectionPasteSummary(""); }} type="button">
                       Limpiar
