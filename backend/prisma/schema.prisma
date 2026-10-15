@@ -192,6 +192,7 @@ model SetlistItem {
   songVersionId String
   position      Int
   comment       String      @default("")
+  arrangement   Json        @default("[]")
   setlist       Setlist     @relation(fields: [setlistId], references: [id], onDelete: Cascade)
   songVersion   SongVersion @relation(fields: [songVersionId], references: [id])
 

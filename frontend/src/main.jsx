@@ -32,6 +32,7 @@ import {
   Users,
 } from "lucide-react";
 import { api, API_URL, setAuthToken } from "./api.js";
+import SetlistArrangementEditor from "./SetlistArrangementEditor.jsx";
 import "./styles.css";
 
 const DEFAULT_CHORDS = {
@@ -3957,6 +3958,7 @@ function setlistPayload(form, orderItems) {
       songVersionId: item.songVersionId,
       position: index + 1,
       comment: item.comment || "",
+      arrangement: item.arrangement || [],
     })),
   };
 }
@@ -3972,7 +3974,9 @@ function setlistItemsToOrder(items = []) {
       versionName: item.songVersion?.name || `Tono ${item.songVersion?.key || ""}`,
       key: item.songVersion?.key || "",
       capo: item.songVersion?.capo || 0,
-      lyrics: item.songVersion?.lyrics || "",
+      baseLyrics: item.songVersion?.lyrics || "",
+      arrangement: item.arrangement || [],
+      lyrics: item.arrangement?.length ? serializeBaseSectionsToLyrics(item.arrangement) : item.songVersion?.lyrics || "",
       rehearsalSpeed: Number(item.songVersion?.rehearsalSpeed || 0.75),
       comment: item.comment || "",
     }));
@@ -4104,6 +4108,21 @@ function V2SetlistsView({ setlists, setlistsLoading, chords, onReload, setGlobal
   const [selectedSetlistDetails, setSelectedSetlistDetails] = useState(null);
   const [setlistDetailLoading, setSetlistDetailLoading] = useState(false);
 
+  async function saveArrangement(localId, arrangement) {
+    await api(`/setlists/${selectedSetlistId}/items/${localId}/arrangement`, {
+      method: "PATCH",
+      body: JSON.stringify({ arrangement }),
+    });
+    setOrderItems((current) => current.map((item) => item.localId === localId
+      ? { ...item, arrangement, lyrics: serializeBaseSectionsToLyrics(arrangement) }
+      : item));
+    setSelectedSetlistDetails((current) => current ? {
+      ...current,
+      items: current.items.map((item) => item.id === localId ? { ...item, arrangement } : item),
+    } : current);
+    await onReload();
+  }
+
   const selectedSetlist = useMemo(() => (
     selectedSetlistDetails?.id === selectedSetlistId
       ? selectedSetlistDetails
@@ -4185,6 +4204,7 @@ function V2SetlistsView({ setlists, setlistsLoading, chords, onReload, setGlobal
       });
       setMessage("Datos de la setlist actualizados.");
       await onReload();
+      await openSetlist(selectedSetlist);
       setScreen("detail");
       window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
     } catch (error) {
@@ -4208,6 +4228,7 @@ function V2SetlistsView({ setlists, setlistsLoading, chords, onReload, setGlobal
       setOrderItems(nextItems);
       setMessage("Cancion quitada de la setlist.");
       await onReload();
+      await openSetlist(selectedSetlist);
     } catch (error) {
       setGlobalError(error.message);
     } finally {
@@ -4253,6 +4274,10 @@ function V2SetlistsView({ setlists, setlistsLoading, chords, onReload, setGlobal
         onSpeedChange={() => {}}
       />
     );
+  }
+
+  if (screen === "arrangement" && selectedSetlist && isAdmin) {
+    return <SetlistArrangementEditor items={orderItems} setlistName={selectedSetlist.name} parseSections={parseBaseSectionsFromLyrics} onSave={saveArrangement} onClose={() => setScreen("detail")} />;
   }
 
   if (screen === "edit" && selectedSetlist) {
@@ -4399,6 +4424,7 @@ function V2SetlistsView({ setlists, setlistsLoading, chords, onReload, setGlobal
                   <strong>{item.songTitle}</strong>
                   <span>{item.artist || "Sin artista"} - Tono {item.key}{item.capo ? ` - Capo ${item.capo}` : ""}</span>
                   {item.comment ? <small>{item.comment}</small> : null}
+                  {item.arrangement?.length ? <small>Ejecucion: {item.arrangement.map((block) => block.name).join(" / ")}</small> : null}
                 </div>
                 {isAdmin ? (
                   <button className="danger-action" onClick={() => removeSongFromSetlist(item.localId)} disabled={saving} type="button">
@@ -4414,6 +4440,7 @@ function V2SetlistsView({ setlists, setlistsLoading, chords, onReload, setGlobal
           {message ? <p className="success-box">{message}</p> : null}
 
           <footer className="v2-setlist-bottom-actions">
+            {isAdmin ? <button onClick={() => setScreen("arrangement")} disabled={!orderItems.length || saving} type="button"><ListPlus size={17} /> Armado de ejecucion</button> : null}
             <button className="projection-action" onClick={() => setSessionMode("projection")} disabled={!orderItems.length} type="button">
               <Monitor size={17} /> Proyeccion
             </button>

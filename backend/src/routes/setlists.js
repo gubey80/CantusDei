@@ -5,10 +5,18 @@ import { requireAdmin } from "../auth.js";
 
 export const setlistsRouter = Router();
 
+const arrangementSchema = z.array(z.object({
+  id: z.string().min(1),
+  type: z.enum(["intro", "verse", "prechorus", "chorus", "bridge", "solo", "instrumental", "final", "other"]),
+  name: z.string().trim().min(1).max(120),
+  lyrics: z.string().max(100000),
+})).max(200);
+
 const itemSchema = z.object({
   songVersionId: z.string(),
   position: z.number().int().min(1),
   comment: z.string().default(""),
+  arrangement: arrangementSchema.optional(),
 });
 
 const setlistSchema = z.object({
@@ -94,20 +102,42 @@ setlistsRouter.post("/", requireAdmin, async (req, res, next) => {
 setlistsRouter.put("/:id", requireAdmin, async (req, res, next) => {
   try {
     const input = setlistSchema.parse(req.body);
-    await prisma.setlistItem.deleteMany({ where: { setlistId: req.params.id } });
-    const setlist = await prisma.setlist.update({
-      where: { id: req.params.id },
-      data: {
-        name: input.name,
-        date: new Date(input.date),
-        leader: input.leader,
-        musicians: input.musicians,
-        comments: input.comments,
-        items: { create: input.items },
-      },
-      include: { items: { orderBy: { position: "asc" } } },
+    const setlist = await prisma.$transaction(async (tx) => {
+      const previousItems = await tx.setlistItem.findMany({ where: { setlistId: req.params.id }, orderBy: { position: "asc" } });
+      const items = input.items.map((item) => {
+        const previousIndex = previousItems.findIndex((previous) => previous.songVersionId === item.songVersionId);
+        const previous = previousIndex >= 0 ? previousItems.splice(previousIndex, 1)[0] : null;
+        return { ...item, arrangement: item.arrangement ?? previous?.arrangement ?? [] };
+      });
+      await tx.setlistItem.deleteMany({ where: { setlistId: req.params.id } });
+      return tx.setlist.update({
+        where: { id: req.params.id },
+        data: {
+          name: input.name,
+          date: new Date(input.date),
+          leader: input.leader,
+          musicians: input.musicians,
+          comments: input.comments,
+          items: { create: items },
+        },
+        include: { items: { orderBy: { position: "asc" } } },
+      });
     });
     res.json(setlist);
+  } catch (error) {
+    next(error);
+  }
+});
+
+setlistsRouter.patch("/:id/items/:itemId/arrangement", requireAdmin, async (req, res, next) => {
+  try {
+    const arrangement = arrangementSchema.parse(req.body.arrangement);
+    const result = await prisma.setlistItem.updateMany({
+      where: { id: req.params.itemId, setlistId: req.params.id },
+      data: { arrangement },
+    });
+    if (!result.count) return res.status(404).json({ message: "Cancion no encontrada en esta setlist. Vuelve a abrirla." });
+    res.json({ arrangement });
   } catch (error) {
     next(error);
   }
