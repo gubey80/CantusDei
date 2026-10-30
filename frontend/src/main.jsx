@@ -34,6 +34,7 @@ import {
 import { api, API_URL, setAuthToken } from "./api.js";
 import SetlistArrangementEditor from "./SetlistArrangementEditor.jsx";
 import SetlistMonitor from "./SetlistMonitor.jsx";
+import ResponsiveLyricLine from "./ResponsiveLyricLine.jsx";
 import "./styles.css";
 
 const DEFAULT_CHORDS = {
@@ -777,8 +778,11 @@ function LyricsView({ lyrics, showChords }) {
         }
         return (
           <div key={index} className="lyric-line">
-            <pre className="chord-row">{buildChordLine(parsed.text, parsed.chords)}</pre>
-            <pre className="text-row">{parsed.text || " "}</pre>
+            <div className="desktop-lyric-line">
+              <pre className="chord-row">{buildChordLine(parsed.text, parsed.chords)}</pre>
+              <pre className="text-row">{parsed.text || " "}</pre>
+            </div>
+            <ResponsiveLyricLine text={parsed.text} chords={parsed.chords} showChords={showChords} buildChordLine={buildChordLine} />
           </div>
         );
       })}

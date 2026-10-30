@@ -2138,6 +2138,42 @@ button:disabled {
   display: none;
 }
 
+.mobile-lyric-line { display: none; }
+
+@media (max-width: 760px) {
+  .lyrics .desktop-lyric-line { display: none; }
+
+  .lyrics .mobile-lyric-line {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    font: 400 16px/1.55 "Cascadia Mono", Consolas, "Courier New", monospace;
+    letter-spacing: 0;
+  }
+
+  .lyrics .mobile-lyric-pair { min-width: 0; }
+
+  .lyrics .mobile-chord-row,
+  .lyrics .mobile-text-row {
+    margin: 0;
+    padding: 0;
+    max-width: 100%;
+    overflow: visible;
+    white-space: pre;
+    font: inherit;
+    letter-spacing: 0;
+    background: transparent;
+  }
+
+  .lyrics .mobile-chord-row { color: #b95700; font-weight: 400; line-height: 1.4; }
+  .lyrics .mobile-text-row { color: var(--ink); }
+  .lyrics .lyric-line { min-height: 0; padding-bottom: 14px; }
+  .lyrics .lyric-line.is-empty { min-height: 18px; padding: 0; }
+  .setlist-projection-lyrics .mobile-text-row { color: #f8fafc; }
+  .setlist-projection-lyrics .mobile-chord-row { color: #f1b36d; }
+}
+
 .editable-lyrics-preview {
   position: relative;
   display: grid;
