@@ -6784,10 +6784,12 @@ function App() {
   function applySongSummaries(songData, preferredSelectedSongId = selectedSongId, searchValue = search) {
     setSongs(songData);
     writeCachedSongSummaries(songData, searchValue);
-    const preferredExists = songData.some((song) => song.id === preferredSelectedSongId);
-    if (preferredSelectedSongId && preferredExists) setSelectedSongId(preferredSelectedSongId);
-    else if (songData[0]) setSelectedSongId(songData[0].id);
-    else setSelectedSongId("");
+    setSelectedSongId((currentId) => {
+      // A selection made while this request was pending takes precedence.
+      if (currentId && currentId !== selectedSongId) return currentId;
+      if (preferredSelectedSongId && songData.some((song) => song.id === preferredSelectedSongId)) return preferredSelectedSongId;
+      return songData[0]?.id || "";
+    });
   }
 
   async function loadSongs(preferredSelectedSongId = selectedSongId, searchValue = search) {
@@ -6870,8 +6872,8 @@ function App() {
   }, [search]);
 
   const selectedSongSummary = useMemo(
-    () => songs.find((song) => song.id === selectedSongId) || songs[0] || null,
-    [songs, selectedSongId],
+    () => selectedSongId ? songs.find((song) => song.id === selectedSongId) || songDetailsById[selectedSongId] || null : songs[0] || null,
+    [songs, selectedSongId, songDetailsById],
   );
   const selectedSong = useMemo(
     () => (selectedSongSummary ? songDetailsById[selectedSongSummary.id] || selectedSongSummary : null),
